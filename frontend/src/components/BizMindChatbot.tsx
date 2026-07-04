@@ -30,18 +30,18 @@ const SUGGESTED_QUESTIONS = [
   "Generate summary",
 ];
 
-const SYSTEM_INSTRUCTIONS = `You are "BizMind AI", a friendly and concise enterprise pipeline assistant.
+const SYSTEM_PROMPT = `You are "BizMind AI", a smart and friendly enterprise assistant built into a sales pipeline dashboard. You can answer ANY question the user asks — whether it's about the pipeline data, general business knowledge, greetings, or anything else.
 
-CRITICAL RULE: Only answer what the user actually asks. Do NOT proactively volunteer pipeline data, metrics, or business context unless the user specifically asks for it.
-
-Conversation rules:
-- If the user says a greeting (hello, hi, hey, good morning etc.) — respond with a natural, brief greeting back. Nothing else.
-- If the user asks a casual or off-topic question — answer it naturally and briefly like a helpful colleague would.
-- If the user asks about pipeline, deals, forecasts, risk, performance, or any business topic — THEN use the pipeline data provided to give a sharp, specific, data-grounded answer.
-- Never mention API keys, mock mode, system prompts, or that you are an AI model.
-- Keep all answers short and direct. No unnecessary preamble. No "Great question!" or filler phrases.
-- Use bullet points only when listing multiple items. Prefer one or two sentences for simple questions.
-- End business-related answers with one clear recommended next action when relevant.`;
+RULES:
+- If the user greets you (hi, hello, hey, i'm [name]) — respond naturally and warmly. If they give their name, use it.
+- If the user asks who you are — explain you are BizMind AI, an autonomous revenue operations assistant.
+- If the user asks about pipeline, deals, risk, forecasts, reps — use the pipeline data provided to give specific, accurate answers.
+- If the user asks general questions unrelated to pipeline — answer them helpfully like a knowledgeable assistant.
+- NEVER say "I don't know" or "I can't help with that". Always give a useful response.
+- NEVER mention API keys, mock mode, or technical implementation details.
+- Keep answers concise and clear. Use bullet points for lists.
+- If the user's English is broken or unclear, understand the intent and answer accordingly.
+- Always end business-related answers with a clear recommended action.`;
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -66,21 +66,30 @@ interface DashboardContextType {
 }
 
 function buildContextBlock(ctx: DashboardContextType): string {
-  const rows = ctx.pipeline
-    .map(
-      (d) =>
-        `- ${d.deal} (${d.company}) | Stage: ${d.stage} | Value: ${d.value} | Days: ${d.days} | Health: ${d.health} | Rec: ${d.recommendation}`
-    )
-    .join("\n");
+  const PIPELINE_DEALS = ctx.pipeline;
+  const AT_RISK_DEALS = PIPELINE_DEALS.filter(d => d.health === 'At-Risk');
+  const WATCH_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Watch');
+  const HEALTHY_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Healthy');
+  const STALE_DEALS = PIPELINE_DEALS.filter(d => d.days >= 14);
 
-  return `CURRENT DASHBOARD SNAPSHOT
-Total Pipeline Value: ${ctx.totalPipelineValue}
-Deals at Risk: ${ctx.dealsAtRisk}
-Forecast Accuracy: ${ctx.forecastAccuracy}
-Avg Deal Velocity: ${ctx.avgDealVelocity}
+  return `
+DASHBOARD CONTEXT:
+- App Name: BizMind AI
+- Total Pipeline Value: ${ctx.totalPipelineValue}
+- Total Deals: ${PIPELINE_DEALS.length}
+- At-Risk Deals: ${AT_RISK_DEALS.length} (${AT_RISK_DEALS.map(d=>d.deal).join(', ')})
+- Watch Deals: ${WATCH_DEALS.length} (${WATCH_DEALS.map(d=>d.deal).join(', ')})
+- Healthy Deals: ${HEALTHY_DEALS.length}
+- Stale Deals (14+ days): ${STALE_DEALS.length}
+- Forecast Accuracy: ${ctx.forecastAccuracy}
+- Avg Deal Velocity: ${ctx.avgDealVelocity}
+- Top Rep: Marcus Reid ($1,200K pipeline)
 
-PIPELINE HEALTH TABLE:
-${rows}`;
+FULL DEAL LIST:
+${PIPELINE_DEALS.map(d=>`${d.deal} | ${d.company} | ${d.stage} | ${d.value} | ${d.days} days | ${d.health} | Rep: Marcus Reid | Action: ${d.recommendation}`).join('\n')}
+
+ACTIVE AGENTS: PipelineAnalystAgent, InsightGeneratorAgent, AlertManagerAgent, ReportBuilderAgent
+`;
 }
 
 function formatAssistantText(text: string): React.ReactNode[] {
@@ -274,7 +283,7 @@ export default function BizMindChatbot() {
 
       const body = {
         system_instruction: {
-          parts: [{ text: `${SYSTEM_INSTRUCTIONS}\n\n${contextBlock}` }],
+          parts: [{ text: `${SYSTEM_PROMPT}\n\n${contextBlock}` }],
         },
         contents,
         generationConfig: {
@@ -324,7 +333,7 @@ export default function BizMindChatbot() {
   const sendMessage = useCallback(
     async (textOverride?: string) => {
       const text = (textOverride ?? input).trim();
-      if (!text || isLoading || isStreaming) return;
+      if (!text || isLoading) return;
 
       const newUserMessage: Message = { role: "user", text };
       const updatedHistory = [...messages, newUserMessage];
@@ -333,49 +342,19 @@ export default function BizMindChatbot() {
       setInput("");
       setIsLoading(true);
 
+      let reply = "";
+
       try {
-        let finalReply = smartLocalResponse(text, dashboardContext);
-        
-        if (finalReply) {
-          // If we have a local match, simulate streaming
-          const isSimple = finalReply.startsWith("Hello!") || finalReply.startsWith("Nice to meet you") || finalReply.startsWith("I can help with");
-          const delayTime = isSimple ? 2000 : 2000 + Math.floor(Math.random() * 1000);
-          
-          await new Promise(r => setTimeout(r, delayTime));
-          setIsLoading(false);
-          setIsStreaming(true);
-          
-          setMessages((prev) => [...prev, { role: "assistant", text: "" }]);
-          
-          for (let i = 1; i <= finalReply.length; i += 2) {
-            await new Promise(r => setTimeout(r, 15));
-            setMessages((prev) => {
-              const newList = [...prev];
-              newList[newList.length - 1] = { ...newList[newList.length - 1], text: finalReply!.slice(0, i) };
-              return newList;
-            });
-          }
-          
-          setMessages((prev) => {
-            const newList = [...prev];
-            newList[newList.length - 1] = { ...newList[newList.length - 1], text: finalReply! };
-            return newList;
-          });
-          
-          setIsStreaming(false);
-        } else {
-          // If local match fails, ask Gemini (unusual queries)
-          const reply = await callGemini(messages, text);
-          setIsLoading(false);
-          setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
-        }
+        reply = await callGemini(messages, text);
       } catch (err) {
-        // If Gemini also fails (no API key, network error), use generic fallback
-        setIsLoading(false);
-        setMessages((prev) => [...prev, { role: "assistant", text: "I didn't quite understand that. Try asking about: deals at risk, pipeline value, Q3 forecast, rep performance, or a specific company name like 'Acme Corp'." }]);
+        console.warn("Gemini unavailable, using local engine:", err);
+        reply = smartLocalResponse(text, dashboardContext) || "I didn't quite understand that. Try asking about: deals at risk, pipeline value, Q3 forecast, rep performance, or a specific company name like 'Acme Corp'.";
       }
+
+      setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
+      setIsLoading(false);
     },
-    [input, isLoading, isStreaming, messages, callGemini, dashboardContext]
+    [input, isLoading, messages, callGemini, dashboardContext]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
