@@ -139,6 +139,13 @@ function smartLocalResponse(userMessage: string, ctx: DashboardContextType): str
     return "Hello! How can I help you today?";
   }
 
+  // Introductions
+  const introMatch = q.match(/^(i m|im|i am|my name is)\s+(\w+)/i);
+  if (introMatch) {
+    const name = introMatch[2].charAt(0).toUpperCase() + introMatch[2].slice(1);
+    return `Nice to meet you, ${name}! I'm BizMind AI. How can I help you with your pipeline today?`;
+  }
+
   // Small talk
   if (/how are|howre|you ok/i.test(q)) {
     return "Doing great, thanks! Ready to help with your pipeline. What would you like to know?";
