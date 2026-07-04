@@ -185,9 +185,10 @@ function smartLocalResponse(userMessage: string, ctx: DashboardContextType): str
   }
 
   // Introductions
-  const introMatch = q.match(/^(i m|im|i am|my name is)\s+(\w+)/i);
+  const introMatch = q.match(/^(i m|im|i am|my name is)\s+([a-z0-9_\s]+)/i);
   if (introMatch) {
-    const name = introMatch[2].charAt(0).toUpperCase() + introMatch[2].slice(1);
+    const rawName = introMatch[2].trim();
+    const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
     return `Nice to meet you, ${name}! I'm BizMind AI. How can I help you with your pipeline today?`;
   }
 
