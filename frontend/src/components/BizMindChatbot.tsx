@@ -160,8 +160,18 @@ function smartLocalResponse(userMessage: string, ctx: DashboardContextType): str
     return `Your current forecast accuracy is **${ctx.forecastAccuracy}**. You have a total pipeline value of **${ctx.totalPipelineValue}**. With an average deal velocity of ${ctx.avgDealVelocity}, you are on track to meet your baseline targets, though closing the ${ctx.dealsAtRisk} at-risk deals would provide a comfortable buffer.`;
   }
   
+  // Pipeline details catch-all
+  if (/pipeline|data|deals?|show|give|tell|all|list|overview|what('?s| is)/i.test(msg)) {
+    const PIPELINE_DEALS = ctx.pipeline;
+    const AT_RISK_DEALS = ctx.pipeline.filter(d => d.health === 'At-Risk');
+    const WATCH_DEALS = ctx.pipeline.filter(d => d.health === 'Watch');
+    const HEALTHY_DEALS = ctx.pipeline.filter(d => d.health === 'Healthy');
+    
+    return `Here's your current pipeline overview:\n\n- Total Value: ${ctx.totalPipelineValue} across ${PIPELINE_DEALS.length} deals\n- At-Risk: ${AT_RISK_DEALS.length} deals\n- Watch: ${WATCH_DEALS.length} deals\n- Healthy: ${HEALTHY_DEALS.length} deals\n\nTop at-risk deals:\n${AT_RISK_DEALS.slice(0, 3).map(d => `- **${d.deal}** (${d.company}): ${d.recommendation}`).join('\n')}\n\nAsk me about specific deals, forecasts, or rep performance for more detail.`;
+  }
+  
   // Default fallback
-  return "I can help with deal risk, pipeline value, forecasts, rep performance, stale deals, and specific company lookups. What would you like to know?";
+  return "I can answer questions like:\n- Which deals are at risk?\n- What is the pipeline value?\n- Show forecast Q3\n- Top rep performance\n- Summarize the pipeline\n- Tell me about Acme Corp\n\nWhat would you like to know?";
 }
 
 // ---------------------------------------------------------------------------
