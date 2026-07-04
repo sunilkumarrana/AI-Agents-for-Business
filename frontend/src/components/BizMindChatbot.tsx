@@ -243,78 +243,89 @@ export default function BizMindChatbot() {
 
       if (!reply) throw new Error("Empty response");
       return reply.trim();
-    } catch (err) {
+    } catch (err: any) {
       clearTimeout(timeoutId);
+      console.error("Gemini API failed:", err?.message || err);
       throw err;
     }
   }, []);
 
   const smartLocalFallback = useCallback((text: string): string => {
     const q = text.toLowerCase().trim().replace(/[^\w\s]/g, ' ');
+    // 1. Strict Greeting Regex (Must be pure greeting, nothing else)
+    const isGreeting = /^(h+e+l+o+|h+i+|h+e+y+|hiya|howdy|greetings|yo|sup|good\s+(morning|afternoon|evening|day)|what'?s\s*up|namaste|helo+|hai)[\s!?.,]*$/i.test(q);
+    if (isGreeting) {
+      return `Hello${userName ? ' ' + userName : ''}! How can I help you today?`;
+    }
+
+    // 2. Personal Introduction
     const user = extractName(q);
     if (user) {
       setUserName(user);
       return `Nice to meet you, ${user}! I'm BizMind AI Assistant. How can I help you with your pipeline today?`;
     }
 
-    if (/hello|hi|hey|howdy|greetings|yo|namaste|helo/i.test(q)) {
-      return `Hello${userName ? ' ' + userName : ''}! How can I help you today?`;
-    }
-
-    if (/what are you|who are you|are you an ai|what is this|what is bizmind/i.test(q)) {
+    // 3. Who are you / what are you
+    if (/^(who|what)\s+are\s+you|are\s+you\s+an\s+ai/i.test(q)) {
       return "I am BizMind AI Assistant, a powerful AI copilot embedded in your enterprise sales pipeline platform. I can help you analyze deals, generate forecasts, and monitor your team's performance! 🚀";
     }
 
-    if (/how are you|howre|you ok/i.test(q)) {
+    // 4. What is this app / what is BizMind
+    if (/what\s+is\s+(this|bizmind)|about\s+(this\s+app|bizmind)/i.test(q)) {
+      return "BizMind AI is an enterprise autonomous revenue operations platform. It helps you manage your pipeline, track deals, generate reports, and automate tasks using AI agents.";
+    }
+
+    // 5. How are you / small talk
+    if (/how\s+(are\s+you|are\s+things|are\s+we)|howre|you\s+ok/i.test(q)) {
       return "Doing great, thanks! Ready to help with your pipeline. What would you like to know?";
     }
 
+    // 6. Thank you / bye / compliments / frustration
     if (/thank|thx|appreciate/i.test(q)) {
       return "You're welcome! Let me know if you need anything else.";
     }
-
     if (/bye|goodbye|see ya|cya/i.test(q)) {
       return "Goodbye! Good luck with your pipeline! 👋";
     }
-
-    if (/you are good|nice|helpful|great|awesome/i.test(q)) {
+    if (/you\s+are\s+(good|nice|helpful|great|awesome)/i.test(q)) {
       return "Thank you! I'm always here to help you close more deals! 📈";
     }
-
-    if (/not working|useless|bad|suck/i.test(q)) {
+    if (/(not\s+working|useless|bad|suck)/i.test(q)) {
       return "I'm really sorry about that. I want to be as helpful as possible — please tell me exactly what you're looking for and I'll do my best to assist you!";
     }
 
-    if (/pipeline|data|overview|summary|all|full/i.test(q)) {
-      const atRiskTotal = AT_RISK_DEALS.reduce((s,d)=>s+d.value,0);
-      return `**Pipeline Overview** 📊\n\n- Total Value: $${(TOTAL_PIPELINE/1000000).toFixed(1)}M across ${PIPELINE_DEALS.length} deals\n- At-Risk: ${AT_RISK_DEALS.length} deals ($${(atRiskTotal/1000).toFixed(0)}K)\n- Watch: ${WATCH_DEALS.length} deals\n- Healthy: ${HEALTHY_DEALS.length} deals\n- Stale: ${STALE_DEALS.length} deals\n\n→ Recommended Action: Review the ${AT_RISK_DEALS.length} at-risk deals to prevent churn.`;
-    }
-
-    if (/risk|danger|stall|stuck|problem|bad|issue|concern/i.test(q)) {
+    // 7. At-risk deals
+    if (/\brisk\b|\bdanger\b|\bstall\b|\bstuck\b|\bproblem\b|\bbad\b|\bissue\b|\bconcern\b/i.test(q)) {
       const totalAtRisk = AT_RISK_DEALS.reduce((s,d)=>s+d.value,0);
       return `You have ${AT_RISK_DEALS.length} at-risk deals totalling $${(totalAtRisk/1000).toFixed(0)}K:\n\n${AT_RISK_DEALS.map(d=>`- **${d.name}** (${d.company}) — $${(d.value/1000).toFixed(0)}K, ${d.days} days\n  Recommendation: ${d.recommendation}`).join('\n\n')}\n\n→ Recommended Action: Escalate Acme Corp immediately. ⚠️`;
     }
 
-    if (/forecast|q3|quarter|revenue|predict|target|number/i.test(q)) {
-      return `**Q3 Forecast** 📈\n\n- Forecast Accuracy: 100%\n- Avg Velocity: 9 days\n- Total Pipeline: $${(TOTAL_PIPELINE/1000000).toFixed(1)}M\n- At-Risk: ${AT_RISK_DEALS.length} deals may slip\n\n→ Recommended Action: Address the ${AT_RISK_DEALS.length} at-risk deals to protect Q3 numbers.`;
-    }
-
-    if (/rep|perform|person|who|team|sarah|marcus|priya|james|best|top|leader/i.test(q)) {
-      return `**Rep Performance:**\n\n1. Sarah Jenkins: $3,575K\n2. Marcus Reid: $3,480K\n3. Priya Patel: $1,180K\n\nTop performer: **Sarah Jenkins** 🥇\n\n→ Recommended Action: Reward Sarah for strong Q3 performance.`;
-    }
-
-    if (/stale|old|inactive|movement|activity|overdue|long/i.test(q)) {
+    // 8. Stale deals
+    if (/\bstale\b|\bold\b|\binactive\b|\bmovement\b|\bactivity\b|\boverdue\b|\blong\b/i.test(q)) {
       return `${STALE_DEALS.length} deals stale for 14+ days:\n\n${STALE_DEALS.map(d=>`- **${d.name}** (${d.company}) — ${d.days} days in ${d.stage}\n  Action: ${d.recommendation}`).join('\n\n')}\n\n→ Recommended Action: Re-engage stale deals or mark as closed/lost.`;
     }
 
-    if (/recommend|next|action|should|priority|urgent|do|focus/i.test(q)) {
+    // 9. Rep performance
+    if (/\brep\b|\bperform\b|\bperson\b|\bwho\b|\bteam\b|\bsarah\b|\bmarcus\b|\bpriya\b|\bjames\b|\bbest\b|\btop\b|\bleader\b/i.test(q)) {
+      return `**Rep Performance:**\n\n1. Sarah Jenkins: $3,575K\n2. Marcus Reid: $3,480K\n3. Priya Patel: $1,180K\n\nTop performer: **Sarah Jenkins** 🥇\n\n→ Recommended Action: Reward Sarah for strong Q3 performance.`;
+    }
+
+    // 10. Forecast / Q3
+    if (/\bforecast\b|\bq3\b|\bquarter\b|\brevenue\b|\bpredict\b|\btarget\b|\bnumber\b/i.test(q)) {
+      return `**Q3 Forecast** 📈\n\n- Forecast Accuracy: 100%\n- Avg Velocity: 9 days\n- Total Pipeline: $${(TOTAL_PIPELINE/1000000).toFixed(1)}M\n- At-Risk: ${AT_RISK_DEALS.length} deals may slip\n\n→ Recommended Action: Address the ${AT_RISK_DEALS.length} at-risk deals to protect Q3 numbers.`;
+    }
+
+    // 11. Recommendations
+    if (/\brecommend\b|\bnext\b|\baction\b|\bshould\b|\bpriority\b|\burgent\b|\bdo\b|\bfocus\b/i.test(q)) {
       return `**Top 3 Recommended Actions:** ✅\n\n1. Escalate **Acme Corp** to VP Sales — 18 days stalled\n2. Deploy battlecard for **Wayne Ent.** — competitor mentioned\n3. Re-engage **Cyberdyne** executive sponsor\n\n→ Recommended Action: Execute these three items today.`;
     }
 
-    if (/agent/i.test(q)) {
+    // 11.5 Agents (Bonus)
+    if (/\bagent\b/i.test(q)) {
       return `BizMind AI has several active agents:\n- **PipelineAnalystAgent:** monitors health and velocity\n- **InsightGeneratorAgent:** creates business narratives\n- **AlertManagerAgent:** sends threshold alerts\n- **ReportBuilderAgent:** formats executive reports\n\n→ Recommended Action: Check the Agents tab to build a new agent.`;
     }
 
+    // 12. Specific company lookup
     const matchedDeal = PIPELINE_DEALS.find(d => {
       const dealWords = d.name.toLowerCase().replace(/[^\w\s]/g, ' ').split(" ");
       return q.includes(d.company.toLowerCase().replace(/[^\w\s]/g, ' ')) || 
@@ -322,6 +333,12 @@ export default function BizMindChatbot() {
     });
     if (matchedDeal) {
       return `**${matchedDeal.name}** (${matchedDeal.company})\n- Stage: ${matchedDeal.stage}\n- Value: $${(matchedDeal.value/1000).toFixed(0)}K\n- Days in stage: ${matchedDeal.days}\n- Health: ${matchedDeal.health}\n- Owner: ${matchedDeal.rep}\n\n→ Recommended Action: ${matchedDeal.recommendation}`;
+    }
+
+    // 13. Pipeline overview / general data (Strict pipeline check)
+    if (/\bpipeline\b|\ball deals\b|\bgive.*data\b|\bshow.*deals\b|\btell.*pipeline\b|\bfull.*pipeline\b|\bcomplete.*pipeline\b|\bgenerate summary\b/i.test(q)) {
+      const atRiskTotal = AT_RISK_DEALS.reduce((s,d)=>s+d.value,0);
+      return `**Pipeline Overview** 📊\n\n- Total Value: $${(TOTAL_PIPELINE/1000000).toFixed(1)}M across ${PIPELINE_DEALS.length} deals\n- At-Risk: ${AT_RISK_DEALS.length} deals ($${(atRiskTotal/1000).toFixed(0)}K)\n- Watch: ${WATCH_DEALS.length} deals\n- Healthy: ${HEALTHY_DEALS.length} deals\n- Stale: ${STALE_DEALS.length} deals\n\n→ Recommended Action: Review the ${AT_RISK_DEALS.length} at-risk deals to prevent churn.`;
     }
 
     return "I'm your BizMind AI assistant! I can answer questions about your pipeline, deals, agents, or general business topics. What would you like to know? 💡";
