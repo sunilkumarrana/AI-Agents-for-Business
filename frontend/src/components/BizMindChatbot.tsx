@@ -340,7 +340,7 @@ export default function BizMindChatbot() {
 
     let reply = "";
     try {
-      reply = await callGemini(updatedHistory, text);
+      reply = await callGemini(messages, text);
     } catch (err) {
       reply = smartLocalFallback(text);
     }
