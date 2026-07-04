@@ -3,10 +3,25 @@ import { reports } from '../lib/mockData';
 import { FileText, Download, Bot, Plus, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { generateReport } from '../services/geminiService';
+import { buildPipelineContext } from '../services/liveDataService';
 
 export const ReportsPage: React.FC = () => {
-  const { deals } = useAppContext();
-  const [reportList, setReportList] = useState<any[]>(reports);
+  const { deals, kpis } = useAppContext();
+  const [reportList, setReportList] = useState<any[]>(() => {
+    const saved = localStorage.getItem('bizmind-reports');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return reports;
+      }
+    }
+    return reports;
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('bizmind-reports', JSON.stringify(reportList));
+  }, [reportList]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -14,7 +29,8 @@ export const ReportsPage: React.FC = () => {
     setIsGenerating(true);
     
     try {
-      const result = await generateReport(deals);
+      const context = buildPipelineContext(deals, kpis);
+      const result = await generateReport(context);
       
       if (result.success) {
         const newReport = {
@@ -35,6 +51,25 @@ export const ReportsPage: React.FC = () => {
     }
   };
 
+  const handleDownload = (e: React.MouseEvent, report: any) => {
+    e.stopPropagation();
+    
+    const textContent = report.content || "Report content is currently empty or unavailable.";
+    const fullText = `${report.headline}\nDate: ${report.date}\nAgents: ${report.agents.join(", ")}\n\n${textContent}`;
+    
+    const blob = new Blob([fullText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${report.headline.replace(/\s+/g, "_").toLowerCase()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -42,23 +77,34 @@ export const ReportsPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-white mb-2">Executive Reports</h1>
           <p className="text-slate-400">Auto-generated summaries combining insights across all agents.</p>
         </div>
-        <button 
-          onClick={handleGenerate}
-          disabled={isGenerating}
-          className="flex items-center gap-2 bg-accent hover:bg-blue-500 disabled:bg-blue-900 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              ReportBuilderAgent assembling report...
-            </>
-          ) : (
-            <>
-              <Plus className="w-5 h-5" />
-              Generate New Report
-            </>
-          )}
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => {
+              setReportList(reports);
+              localStorage.removeItem('bizmind-reports');
+            }}
+            className="flex items-center gap-2 text-sm text-slate-400 hover:text-white px-3 py-2 transition-colors"
+          >
+            Reset (demo)
+          </button>
+          <button 
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className="flex items-center gap-2 bg-accent hover:bg-blue-500 disabled:bg-blue-900 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                ReportBuilderAgent assembling...
+              </>
+            ) : (
+              <>
+                <Plus className="w-5 h-5" />
+                Generate New Report
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4">
@@ -87,7 +133,10 @@ export const ReportsPage: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-4">
-                <button className="p-2 text-slate-400 hover:text-white hover:bg-[#1e3a66] rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                <button 
+                  onClick={(e) => handleDownload(e, report)}
+                  className="p-2 text-slate-400 hover:text-white hover:bg-[#1e3a66] rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                >
                   <Download className="w-5 h-5" />
                 </button>
                 {report.content && (

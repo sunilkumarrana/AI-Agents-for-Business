@@ -1,23 +1,50 @@
-import React, { useState } from 'react';
-import { alerts as initialAlerts } from '../lib/mockData';
-import { ShieldAlert, Check, X, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ShieldAlert, Check, X, AlertTriangle, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import clsx from 'clsx';
 import { useAppContext } from '../contexts/AppContext';
 
 export const AlertsPage: React.FC = () => {
-  const [alerts, setAlerts] = useState(initialAlerts);
+  const { deals, decrementDealsAtRisk } = useAppContext();
+  
+  // Track deals the user has already approved or dismissed
+  const [handledDealIds, setHandledDealIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('bizmind-handled-alerts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [fadingId, setFadingId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  useEffect(() => {
+    localStorage.setItem('bizmind-handled-alerts', JSON.stringify(handledDealIds));
+  }, [handledDealIds]);
+
+  // Dynamically generate alerts for any deal that is at-risk and hasn't been handled
+  const activeAlerts = useMemo(() => {
+    return deals
+      .filter(deal => deal.health === 'at-risk' && !handledDealIds.includes(deal.id))
+      .map(deal => ({
+        id: deal.id,
+        severity: deal.value > 1000000 ? 'high' : deal.value > 500000 ? 'medium' : 'low',
+        dealName: `${deal.name} (${deal.company})`,
+        description: `Deal value $${deal.value.toLocaleString()} flagged as at-risk in ${deal.stage} stage.`,
+        action: deal.recommendation,
+        reasoning: [
+          `Detected health state change to At-Risk`,
+          `Analyzed deal velocity (${deal.daysInStage} days in stage)`,
+          `Matched autonomous playbook for ${deal.stage} stage`
+        ]
+      }));
+  }, [deals, handledDealIds]);
+
   const toggleExpand = (id: string) => {
     setExpandedId(prev => prev === id ? null : id);
   };
-  const { decrementDealsAtRisk } = useAppContext();
 
   const handleDismiss = (id: string) => {
-    setAlerts(alerts.filter(a => a.id !== id));
+    setHandledDealIds(prev => [...prev, id]);
   };
 
   const handleApprove = (id: string) => {
@@ -26,9 +53,9 @@ export const AlertsPage: React.FC = () => {
       setFadingId(id);
       setProcessingId(null);
       setTimeout(() => {
-        setAlerts(prev => prev.filter(a => a.id !== id));
+        setHandledDealIds(prev => [...prev, id]);
         decrementDealsAtRisk();
-        setToastMessage('✓ Alert approved and sent');
+        setToastMessage('✓ Alert approved. Agent is executing the playbook.');
         setTimeout(() => setToastMessage(null), 3000);
       }, 300);
     }, 1500);
@@ -44,17 +71,26 @@ export const AlertsPage: React.FC = () => {
         <p className="text-slate-400">Human-in-the-loop review. Approve or dismiss agent recommendations before they are executed.</p>
       </div>
 
-      {alerts.length === 0 ? (
+      {activeAlerts.length === 0 ? (
         <div className="bg-panel border border-[#1e3a66] rounded-xl p-12 text-center flex flex-col items-center">
           <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mb-4">
             <Check className="w-8 h-8 text-success" />
           </div>
           <h3 className="text-xl font-semibold text-white mb-2">All Clear</h3>
-          <p className="text-slate-400">No active alerts requiring your attention right now.</p>
+          <p className="text-slate-400 mb-6">No active alerts requiring your attention right now.</p>
+          <button 
+            onClick={() => {
+              setHandledDealIds([]);
+              localStorage.removeItem('bizmind-handled-alerts');
+            }}
+            className="flex items-center gap-2 text-sm text-accent hover:text-blue-400 transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" /> Reset alert history (demo)
+          </button>
         </div>
       ) : (
         <div className="grid gap-4">
-          {alerts.map(alert => (
+          {activeAlerts.map(alert => (
             <div key={alert.id} className={clsx(
               "bg-panel border border-[#1e3a66] p-6 rounded-xl flex flex-col md:flex-row gap-6 justify-between items-start md:items-center transition-all duration-300",
               fadingId === alert.id ? "opacity-0 translate-x-8" : "opacity-100 translate-x-0"

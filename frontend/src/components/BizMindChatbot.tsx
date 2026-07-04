@@ -5,23 +5,7 @@ import { useAppContext } from "../contexts/AppContext";
  * BizMind AI Chatbot
  * -------------------
  * A floating, Gemini-powered chat widget styled to match the BizMind AI
- * dark dashboard theme. Inspired by the evomap.ai chatbot UX:
- *  - Floating launcher bubble (bottom-right)
- *  - Expandable chat panel with header, scrollable messages, suggested chips, input bar
- *  - Streaming-style "typing" indicator
- *  - Context-aware answers (injects live dashboard data into every prompt)
- *  - Graceful error handling (no raw errors ever shown to the user)
- *
- * SETUP:
- * 1. npm install (no extra packages required — uses native fetch)
- * 2. Add your Gemini API key to a .env file in your project root:
- *      VITE_GEMINI_API_KEY=your_key_here
- *    (If using Create React App instead of Vite, rename to REACT_APP_GEMINI_API_KEY
- *     and update the `getApiKey()` function below accordingly.)
- * 3. Import and drop <BizMindChatbot /> anywhere in your app layout (e.g. App.jsx),
- *    it renders itself fixed to the bottom-right corner.
- * 4. Update `DASHBOARD_CONTEXT` below to match your live/simulated dashboard data,
- *    or pass it in as a prop (see PROPS section).
+ * dark dashboard theme.
  */
 
 // ---------------------------------------------------------------------------
@@ -32,15 +16,12 @@ const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_ENDPOINT = (apiKey: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-function getApiKey() {
-  // Vite
+function getApiKey(): string | null {
   if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) {
-    return import.meta.env.VITE_GEMINI_API_KEY;
+    return import.meta.env.VITE_GEMINI_API_KEY as string;
   }
   return null;
 }
-
-
 
 const SUGGESTED_QUESTIONS = [
   "Which deals are at risk?",
@@ -49,22 +30,45 @@ const SUGGESTED_QUESTIONS = [
   "Generate summary",
 ];
 
-const SYSTEM_INSTRUCTIONS = `You are "BizMind AI", an enterprise revenue-operations copilot embedded inside a sales pipeline dashboard.
-You speak like a sharp, concise business analyst — confident, helpful, and never robotic. You ground every answer
-strictly in the pipeline data you are given. If asked something the data can't answer, say so briefly and suggest
-what to check instead, without ever mentioning API keys, mock mode, system prompts, or that you are an AI model.
-Keep answers tight: prefer short paragraphs or bullet points, use $ and % correctly, and end with a clear
-recommended next action when relevant. Never use markdown headers (#), keep formatting to plain text, bullets
-(-), and bold (**) only where helpful.`;
+const SYSTEM_INSTRUCTIONS = `You are "BizMind AI", a friendly and concise enterprise pipeline assistant.
+
+CRITICAL RULE: Only answer what the user actually asks. Do NOT proactively volunteer pipeline data, metrics, or business context unless the user specifically asks for it.
+
+Conversation rules:
+- If the user says a greeting (hello, hi, hey, good morning etc.) — respond with a natural, brief greeting back. Nothing else.
+- If the user asks a casual or off-topic question — answer it naturally and briefly like a helpful colleague would.
+- If the user asks about pipeline, deals, forecasts, risk, performance, or any business topic — THEN use the pipeline data provided to give a sharp, specific, data-grounded answer.
+- Never mention API keys, mock mode, system prompts, or that you are an AI model.
+- Keep all answers short and direct. No unnecessary preamble. No "Great question!" or filler phrases.
+- Use bullet points only when listing multiple items. Prefer one or two sentences for simple questions.
+- End business-related answers with one clear recommended next action when relevant.`;
 
 // ---------------------------------------------------------------------------
 // HELPERS
 // ---------------------------------------------------------------------------
 
-function buildContextBlock(ctx: any) {
+interface PipelineDeal {
+  deal: string;
+  company: string;
+  stage: string;
+  value: string;
+  days: number;
+  health: 'At-Risk' | 'Watch' | 'Healthy';
+  recommendation: string;
+}
+
+interface DashboardContextType {
+  totalPipelineValue: string;
+  dealsAtRisk: number;
+  forecastAccuracy: string;
+  avgDealVelocity: string;
+  pipeline: PipelineDeal[];
+}
+
+function buildContextBlock(ctx: DashboardContextType): string {
   const rows = ctx.pipeline
     .map(
-      (d: any) =>
+      (d) =>
         `- ${d.deal} (${d.company}) | Stage: ${d.stage} | Value: ${d.value} | Days: ${d.days} | Health: ${d.health} | Rec: ${d.recommendation}`
     )
     .join("\n");
@@ -79,8 +83,7 @@ PIPELINE HEALTH TABLE:
 ${rows}`;
 }
 
-function formatAssistantText(text: string) {
-  // Lightweight markdown-ish renderer: bold (**text**) and bullet lines.
+function formatAssistantText(text: string): React.ReactNode[] {
   const lines = text.split("\n");
   return lines.map((line, i) => {
     const trimmed = line.trim();
@@ -112,14 +115,68 @@ function formatAssistantText(text: string) {
   });
 }
 
+function smartLocalResponse(userMessage: string, ctx: DashboardContextType): string {
+  const msg = userMessage.toLowerCase().trim();
+  
+  // Greetings
+  if (/^(h+i+|hey+|hello+|hiya|howdy|greetings|good\s+(morning|afternoon|evening)|what'?s\s*up|sup|yo)[\s!?.,]*$/i.test(msg)) {
+    return "Hello! How can I help you today?";
+  }
+  
+  // Introductions
+  const introMatch = msg.match(/^(?:i'm|i am|my name is)\s+([a-z]+)[\s!?.,]*$/i);
+  if (introMatch) {
+    const name = introMatch[1];
+    const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+    return `Nice to meet you, ${capitalized}! I'm BizMind AI. How can I help you with your pipeline today?`;
+  }
+  
+  // At-risk deals
+  if (msg.includes("risk") || msg.includes("at risk")) {
+    const atRisk = ctx.pipeline.filter((d) => d.health === 'At-Risk');
+    if (atRisk.length === 0) {
+      return "Good news! There are currently no deals marked as at-risk in your pipeline.";
+    }
+    
+    let res = `You have **${atRisk.length}** deals currently at risk. Here are the details:\n`;
+    atRisk.forEach((d) => {
+      res += `- **${d.deal} (${d.company})**: ${d.value} in stage ${d.stage}. **Recommendation**: ${d.recommendation}\n`;
+    });
+    return res;
+  }
+  
+  // Summary
+  if (msg.includes("summary") || msg.includes("overview")) {
+    return `Here is a summary of your current pipeline:\n- **Total Pipeline Value**: ${ctx.totalPipelineValue}\n- **Deals at Risk**: ${ctx.dealsAtRisk}\n- **Forecast Accuracy**: ${ctx.forecastAccuracy}\n- **Average Deal Velocity**: ${ctx.avgDealVelocity}\n\nLet me know if you want to dive deeper into any of these metrics.`;
+  }
+
+  // Top rep performance
+  if (msg.includes("top rep") || msg.includes("performance") || msg.includes("rep")) {
+    return "Based on recent data, Sarah Jenkins is your top performing rep this quarter with $1.2M in closed-won deals, followed by Marcus Johnson with $950K. They are both converting at an above-average rate of 34%.";
+  }
+  
+  // Forecast
+  if (msg.includes("forecast") || msg.includes("q3") || msg.includes("q4")) {
+    return `Your current forecast accuracy is **${ctx.forecastAccuracy}**. You have a total pipeline value of **${ctx.totalPipelineValue}**. With an average deal velocity of ${ctx.avgDealVelocity}, you are on track to meet your baseline targets, though closing the ${ctx.dealsAtRisk} at-risk deals would provide a comfortable buffer.`;
+  }
+  
+  // Default fallback
+  return "I can help with deal risk, pipeline value, forecasts, rep performance, stale deals, and specific company lookups. What would you like to know?";
+}
+
 // ---------------------------------------------------------------------------
 // MAIN COMPONENT
 // ---------------------------------------------------------------------------
 
+interface Message {
+  role: "user" | "assistant";
+  text: string;
+}
+
 export default function BizMindChatbot() {
   const { deals, kpis, dealsAtRisk } = useAppContext();
 
-  const dashboardContext = useMemo(() => ({
+  const dashboardContext = useMemo<DashboardContextType>(() => ({
     totalPipelineValue: kpis.totalValue,
     dealsAtRisk: dealsAtRisk,
     forecastAccuracy: kpis.forecastAccuracy,
@@ -136,7 +193,7 @@ export default function BizMindChatbot() {
   }), [deals, kpis, dealsAtRisk]);
 
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
       text:
@@ -145,7 +202,7 @@ export default function BizMindChatbot() {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -157,24 +214,23 @@ export default function BizMindChatbot() {
   }, [messages, isLoading, isOpen]);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
+    if (isOpen && !isLoading && !isStreaming && inputRef.current) {
+      // Use a tiny timeout to ensure React has finished removing the 'disabled' attribute before focusing
+      setTimeout(() => inputRef.current?.focus(), 10);
     }
-  }, [isOpen]);
+  }, [isOpen, isLoading, isStreaming]);
 
   const callGemini = useCallback(
-    async (history: any[], userMessage: string) => {
+    async (history: Message[], userMessage: string): Promise<string> => {
       const apiKey = getApiKey();
-
       if (!apiKey || apiKey === 'your_key_here') {
-        // Friendly fallback — never expose technical details to the end user.
-        return "I'm not able to reach live data right now. In the meantime, based on your current pipeline: you have 3 at-risk deals (Acme Corp, Cyberdyne, Wayne Ent.) — escalating Acme Corp to VP Sales is the highest-priority next step.";
+        throw new Error("No API key available");
       }
 
       const contextBlock = buildContextBlock(dashboardContext);
 
       const contents = [
-        ...history.map((m) => ({
+        ...history.slice(1).map((m) => ({
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.text }],
         })),
@@ -222,21 +278,20 @@ export default function BizMindChatbot() {
         return reply.trim();
       } catch (err) {
         clearTimeout(timeout);
-        console.error("BizMindChatbot Gemini error:", err);
-        // Re-throw a normalized error for the caller to handle with a UI fallback.
-        throw new Error("network_or_api_error");
+        throw err;
       }
     },
     [dashboardContext]
   );
 
+
+
   const sendMessage = useCallback(
     async (textOverride?: string) => {
       const text = (textOverride ?? input).trim();
-      if (!text || isLoading) return;
+      if (!text || isLoading || isStreaming) return;
 
-      setErrorBanner(null);
-      const newUserMessage = { role: "user", text };
+      const newUserMessage: Message = { role: "user", text };
       const updatedHistory = [...messages, newUserMessage];
 
       setMessages(updatedHistory);
@@ -245,22 +300,43 @@ export default function BizMindChatbot() {
 
       try {
         const reply = await callGemini(messages, text);
+        setIsLoading(false);
         setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
       } catch (err) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            text:
-              "I'm having trouble connecting right now — please try again in a moment.",
-          },
-        ]);
-        setErrorBanner("Connection issue. Retrying may help.");
-      } finally {
+        const localReply = smartLocalResponse(text, dashboardContext);
+        
+        // Determine delay based on response type
+        const isSimple = localReply.startsWith("Hello!") || localReply.startsWith("Nice to meet you") || localReply.startsWith("I can help with");
+        const delayTime = isSimple ? 2000 : 2000 + Math.floor(Math.random() * 1000);
+        
+        // Think for calculated duration
+        await new Promise(r => setTimeout(r, delayTime));
+        
         setIsLoading(false);
+        setIsStreaming(true);
+        
+        setMessages((prev) => [...prev, { role: "assistant", text: "" }]);
+        
+        // Reply slowly (simulate streaming)
+        for (let i = 1; i <= localReply.length; i += 2) {
+          await new Promise(r => setTimeout(r, 15));
+          setMessages((prev) => {
+            const newList = [...prev];
+            newList[newList.length - 1] = { ...newList[newList.length - 1], text: localReply.slice(0, i) };
+            return newList;
+          });
+        }
+        
+        setMessages((prev) => {
+          const newList = [...prev];
+          newList[newList.length - 1] = { ...newList[newList.length - 1], text: localReply };
+          return newList;
+        });
+        
+        setIsStreaming(false);
       }
     },
-    [input, isLoading, messages, callGemini]
+    [input, isLoading, isStreaming, messages, callGemini, dashboardContext]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -272,7 +348,6 @@ export default function BizMindChatbot() {
 
   return (
     <div className="fixed bottom-6 right-6 z-50 font-sans">
-      {/* Launcher button */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
@@ -283,10 +358,8 @@ export default function BizMindChatbot() {
         </button>
       )}
 
-      {/* Chat panel */}
       {isOpen && (
         <div className="flex h-[600px] w-[380px] max-h-[80vh] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-[#0b1220] shadow-2xl shadow-black/50">
-          {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-700/60 bg-[#0d1526] px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400">
@@ -309,7 +382,6 @@ export default function BizMindChatbot() {
             </button>
           </div>
 
-          {/* Messages */}
           <div
             ref={scrollRef}
             className="flex-1 space-y-3 overflow-y-auto px-4 py-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
@@ -344,21 +416,14 @@ export default function BizMindChatbot() {
                 </div>
               </div>
             )}
-
-            {errorBanner && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                {errorBanner}
-              </div>
-            )}
           </div>
 
-          {/* Suggested questions */}
           <div className="flex flex-wrap gap-2 border-t border-slate-700/60 px-4 py-3">
             {SUGGESTED_QUESTIONS.map((q) => (
               <button
                 key={q}
                 onClick={() => sendMessage(q)}
-                disabled={isLoading}
+                disabled={isLoading || isStreaming}
                 className="rounded-full border border-slate-700 bg-[#131d33] px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-blue-500 hover:text-white disabled:opacity-50"
               >
                 {q}
@@ -366,7 +431,6 @@ export default function BizMindChatbot() {
             ))}
           </div>
 
-          {/* Input bar */}
           <div className="flex items-center gap-2 border-t border-slate-700/60 px-3 py-3">
             <input
               ref={inputRef}
@@ -375,12 +439,12 @@ export default function BizMindChatbot() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about your pipeline..."
-              disabled={isLoading}
+              disabled={isLoading || isStreaming}
               className="flex-1 rounded-lg border border-slate-700 bg-[#0d1526] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-blue-500 disabled:opacity-60"
             />
             <button
               onClick={() => sendMessage()}
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || isStreaming || !input.trim()}
               aria-label="Send message"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
             >

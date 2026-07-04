@@ -41,12 +41,22 @@ export interface Report {
   date: string;
   headline: string;
   agents: string[];
+  content?: string;
 }
 
 export const reports: Report[] = [
-  { id: '1', date: '2026-06-25', headline: 'Q3 Pipeline Risk Analysis', agents: ['ReportBuilderAgent', 'PipelineAnalystAgent'] },
-  { id: '2', date: '2026-06-18', headline: 'Weekly Forecast Update', agents: ['ReportBuilderAgent'] },
-  { id: '3', date: '2026-06-11', headline: 'Stale Deals Audit', agents: ['ReportBuilderAgent', 'InsightGeneratorAgent'] }
+  { 
+    id: '1', date: '2026-06-25', headline: 'Q3 Pipeline Risk Analysis', agents: ['ReportBuilderAgent', 'PipelineAnalystAgent'],
+    content: `Based on an analysis of all active deals in the Q3 pipeline, we have identified $2.4M in total revenue that is currently showing signs of stagnation or competitive risk. \n\nThe primary contributor is the Acme Corp Enterprise Expansion deal ($850k), which has remained in the Negotiation stage for 18 days without a response from their primary stakeholder. PipelineAnalystAgent strongly recommends escalating this directly to the VP of Sales immediately to prevent further stalling.\n\nOverall forecast accuracy remains high at 84%, but failing to advance the top 3 watch-list deals by Friday will jeopardize our stretch goal for the quarter.`
+  },
+  { 
+    id: '2', date: '2026-06-18', headline: 'Weekly Forecast Update', agents: ['ReportBuilderAgent'],
+    content: `Weekly Summary: Committed revenue has increased to $1.8M for June, with a best-case scenario of $2.4M if the Stark Ind. and Tyrell Corp deals close on schedule. \n\nAverage deal velocity across the board is currently 9 days, representing a 14% improvement over last month. The sales team should prioritize pushing late-stage proposals across the finish line this week to lock in the committed numbers.`
+  },
+  { 
+    id: '3', date: '2026-06-11', headline: 'Stale Deals Audit', agents: ['ReportBuilderAgent', 'InsightGeneratorAgent'],
+    content: `A deep-dive audit into the current pipeline has surfaced 7 deals that have been sitting in the Qualification or Demo stages for over 14 days.\n\nInsightGeneratorAgent notes a historical trend: deals that stall at this phase for more than two weeks have a 60% lower close rate. \n\nRecommended Action: Reps should implement the re-engagement playbook for Cyberdyne and Massive Dynamic immediately, or consider marking them as Closed/Lost to refocus efforts on higher-probability opportunities.`
+  }
 ];
 
 export interface Alert {

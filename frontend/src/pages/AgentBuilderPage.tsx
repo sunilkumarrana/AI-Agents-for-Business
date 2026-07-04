@@ -11,8 +11,43 @@ export const AgentBuilderPage: React.FC = () => {
   const [sourceSystem, setSourceSystem] = useState('');
   const [targetSystem, setTargetSystem] = useState('');
   const [requirements, setRequirements] = useState('');
+  const [agentGoals, setAgentGoals] = useState('');
+  const [hasAttemptedContinue, setHasAttemptedContinue] = useState(false);
   const { deployAgent } = useAppContext();
   const navigate = useNavigate();
+
+  const [wireStatus, setWireStatus] = useState<'pending' | 'processing' | 'approved' | 'rejected'>('pending');
+
+  const handleWireAction = (action: 'approved' | 'rejected') => {
+    setWireStatus('processing');
+    setTimeout(() => {
+      setWireStatus(action);
+    }, 1000);
+  };
+
+  const SMART_TARGETS: Record<string, string[]> = {
+    // CRM systems → other CRMs, finance, communication
+    Salesforce:      ['HubSpot', 'NetSuite', 'SAP', 'Slack', 'Microsoft 365'],
+    HubSpot:         ['Salesforce', 'NetSuite', 'Slack', 'Microsoft 365', 'Jira'],
+
+    // ERP / Finance → other ERP, accounting, CRM
+    SAP:             ['Oracle', 'NetSuite', 'Workday', 'Salesforce', 'ServiceNow'],
+    Oracle:          ['SAP', 'NetSuite', 'Workday', 'Salesforce', 'Microsoft 365'],
+    NetSuite:        ['QuickBooks', 'SAP', 'Oracle', 'Salesforce', 'Microsoft 365'],
+    QuickBooks:      ['NetSuite', 'SAP', 'Oracle', 'Microsoft 365', 'Salesforce'],
+
+    // HR / Workforce → ERP, communication
+    Workday:         ['SAP', 'Oracle', 'Microsoft 365', 'Slack', 'ServiceNow'],
+
+    // Communication / Collaboration → ticketing, CRM, project tools
+    Slack:           ['Jira', 'Microsoft 365', 'ServiceNow', 'Salesforce', 'Zendesk'],
+    'Microsoft 365': ['Slack', 'ServiceNow', 'Jira', 'Salesforce', 'SAP'],
+
+    // Ticketing / Support → CRM, communication, ITSM
+    Jira:            ['Slack', 'ServiceNow', 'Microsoft 365', 'Salesforce', 'Zendesk'],
+    Zendesk:         ['Salesforce', 'HubSpot', 'Jira', 'Slack', 'ServiceNow'],
+    ServiceNow:      ['Jira', 'SAP', 'Oracle', 'Microsoft 365', 'Slack'],
+  };
 
   const performanceData = [
     { month: 'Jan', value: 30 },
@@ -44,6 +79,11 @@ export const AgentBuilderPage: React.FC = () => {
   ];
 
   const handleContinue = () => {
+    if (step === 2 && agentGoals.trim().length === 0) {
+      setHasAttemptedContinue(true);
+      return;
+    }
+    setHasAttemptedContinue(false);
     setIsProcessing(true);
     setTimeout(() => {
       setIsProcessing(false);
@@ -119,7 +159,10 @@ export const AgentBuilderPage: React.FC = () => {
             <div className="bg-[#0f1522] border border-[#1e3a66]/60 p-4 rounded-xl flex flex-col gap-4">
               <div className="flex justify-between items-center border-b border-[#1e3a66]/40 pb-3">
                 <span className="text-white font-semibold text-sm">Pending Action: Wire Transfer</span>
-                <span className="text-[10px] font-bold bg-warning/20 text-warning px-2 py-1 rounded border border-warning/30">REQUIRES REVIEW</span>
+                {wireStatus === 'pending' && <span className="text-[10px] font-bold bg-warning/20 text-warning px-2 py-1 rounded border border-warning/30">REQUIRES REVIEW</span>}
+                {wireStatus === 'approved' && <span className="text-[10px] font-bold bg-success/20 text-success px-2 py-1 rounded border border-success/30">APPROVED</span>}
+                {wireStatus === 'rejected' && <span className="text-[10px] font-bold bg-danger/20 text-danger px-2 py-1 rounded border border-danger/30">REJECTED</span>}
+                {wireStatus === 'processing' && <span className="text-[10px] font-bold bg-accent/20 text-accent px-2 py-1 rounded border border-accent/30">PROCESSING...</span>}
               </div>
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-300">
                 <div><span className="text-slate-500 mr-1">Vendor:</span> Acme Corp</div>
@@ -127,14 +170,27 @@ export const AgentBuilderPage: React.FC = () => {
                 <div><span className="text-slate-500 mr-1">Amount:</span> $24,500.00</div>
                 <div><span className="text-slate-500 mr-1">Risk Assessment:</span> <span className="text-slate-300">Low</span></div>
               </div>
-              <div className="flex items-center gap-3 mt-2">
-                <button className="flex-1 flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-success/30 bg-success/10 text-success hover:bg-success/20 transition-colors text-sm font-medium">
-                  <Check className="w-4 h-4" /> Approve
-                </button>
-                <button className="flex-1 flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 transition-colors text-sm font-medium">
-                  <X className="w-4 h-4" /> Reject
-                </button>
-              </div>
+              {wireStatus === 'pending' ? (
+                <div className="flex items-center gap-3 mt-2">
+                  <button onClick={() => handleWireAction('approved')} className="flex-1 flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-success/30 bg-success/10 text-success hover:bg-success/20 transition-colors text-sm font-medium">
+                    <Check className="w-4 h-4" /> Approve
+                  </button>
+                  <button onClick={() => handleWireAction('rejected')} className="flex-1 flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 transition-colors text-sm font-medium">
+                    <X className="w-4 h-4" /> Reject
+                  </button>
+                </div>
+              ) : wireStatus === 'processing' ? (
+                <div className="flex items-center justify-center mt-2 py-2">
+                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between mt-2 py-1 px-2">
+                   <span className={clsx("text-sm font-medium flex items-center gap-2", wireStatus === 'approved' ? 'text-success' : 'text-danger')}>
+                     {wireStatus === 'approved' ? <><Check className="w-4 h-4"/> Transfer Approved</> : <><X className="w-4 h-4"/> Transfer Rejected</>}
+                   </span>
+                   <button onClick={() => setWireStatus('pending')} className="text-xs text-slate-400 hover:text-white transition-colors underline">Reset (demo)</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -201,8 +257,8 @@ export const AgentBuilderPage: React.FC = () => {
                     </ResponsiveContainer>
                   </div>
                   <div className="flex-1 space-y-2">
-                    {pieData.map((entry, i) => (
-                      <div key={i} className="flex justify-between items-center text-[10px]">
+                    {pieData.map((entry) => (
+                      <div key={entry.name} className="flex justify-between items-center text-[10px]">
                         <div className="flex items-center gap-2">
                           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color }}></div>
                           <span className="text-slate-300">{entry.name}</span>
@@ -237,6 +293,11 @@ export const AgentBuilderPage: React.FC = () => {
             {integrations.map(name => (
               <button 
                 key={name}
+                onClick={() => {
+                  setSourceSystem(name);
+                  setTargetSystem('');
+                  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                }}
                 className="bg-[#0b101a] border border-[#1e3a66]/40 text-slate-300 text-sm py-3 px-2 rounded-lg hover:bg-[#1e3a66]/20 transition-colors flex items-center justify-center"
               >
                 {name}
@@ -255,7 +316,7 @@ export const AgentBuilderPage: React.FC = () => {
           {/* Progress Steps */}
           <div className="flex items-center justify-between mb-10 relative">
             <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-[1px] bg-[#1e3a66]/40 -z-10"></div>
-            {steps.map((s, idx) => {
+            {steps.map((s) => {
               const isActive = s.num === step;
               const isPast = s.num < step;
               return (
@@ -289,7 +350,10 @@ export const AgentBuilderPage: React.FC = () => {
                     <label className="block text-xs text-slate-500 mb-1">Source System</label>
                     <select 
                       value={sourceSystem}
-                      onChange={e => setSourceSystem(e.target.value)}
+                      onChange={e => {
+                        setSourceSystem(e.target.value);
+                        setTargetSystem('');
+                      }}
                       className="w-full bg-[#0b101a] border border-[#1e3a66]/50 text-white text-sm rounded-lg px-3 py-2.5 outline-none focus:border-accent"
                     >
                       <option value="">Select a system</option>
@@ -304,10 +368,26 @@ export const AgentBuilderPage: React.FC = () => {
                     <select 
                       value={targetSystem}
                       onChange={e => setTargetSystem(e.target.value)}
-                      className="w-full bg-[#0b101a] border border-[#1e3a66]/50 text-white text-sm rounded-lg px-3 py-2.5 outline-none focus:border-accent"
+                      disabled={!sourceSystem}
+                      className={clsx("w-full bg-[#0b101a] border border-[#1e3a66]/50 text-white text-sm rounded-lg px-3 py-2.5 outline-none focus:border-accent", !sourceSystem && "opacity-50 cursor-not-allowed")}
                     >
                       <option value="">Select a system</option>
-                      {integrations.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      {sourceSystem && (() => {
+                        const recs = (SMART_TARGETS[sourceSystem] || []).filter(opt => opt !== sourceSystem);
+                        const others = integrations.filter(opt => opt !== sourceSystem && !recs.includes(opt));
+                        return (
+                          <>
+                            {recs.length > 0 && (
+                              <optgroup label="Recommended">
+                                {recs.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </optgroup>
+                            )}
+                            <optgroup label="Other">
+                              {others.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            </optgroup>
+                          </>
+                        );
+                      })()}
                     </select>
                   </div>
                 </div>
@@ -325,8 +405,8 @@ export const AgentBuilderPage: React.FC = () => {
                   />
                   <button 
                     onClick={handleContinue}
-                    disabled={isProcessing}
-                    className="bg-[#9333EA] hover:bg-[#a855f7] text-white text-sm font-medium px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors min-w-[120px] disabled:opacity-70"
+                    disabled={isProcessing || !sourceSystem || !targetSystem}
+                    className="bg-[#9333EA] hover:bg-[#a855f7] text-white text-sm font-medium px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors min-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isProcessing ? (
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -345,9 +425,20 @@ export const AgentBuilderPage: React.FC = () => {
                 <label className="block text-sm text-white mb-3">* Define Agent Goals</label>
                 <p className="text-xs text-slate-400 mb-2">Describe what this agent should accomplish with the connected systems.</p>
                 <textarea 
-                  className="w-full h-32 bg-[#0b101a] border border-[#1e3a66]/50 text-white text-sm rounded-lg px-3 py-3 outline-none focus:border-accent resize-none"
+                  value={agentGoals}
+                  onChange={e => {
+                    setAgentGoals(e.target.value);
+                    if (hasAttemptedContinue) setHasAttemptedContinue(false);
+                  }}
+                  className={clsx(
+                    "w-full h-32 bg-[#0b101a] border text-white text-sm rounded-lg px-3 py-3 outline-none resize-none",
+                    hasAttemptedContinue && agentGoals.trim().length === 0 ? "border-danger focus:border-danger" : "border-[#1e3a66]/50 focus:border-accent"
+                  )}
                   placeholder="e.g., Automatically sync closed-won deals from Salesforce to NetSuite and generate an invoice..."
                 ></textarea>
+                {hasAttemptedContinue && agentGoals.trim().length === 0 && (
+                  <p className="text-danger text-xs mt-2">Please describe your agent's goals to continue.</p>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <button 
@@ -359,7 +450,10 @@ export const AgentBuilderPage: React.FC = () => {
                 <button 
                   onClick={handleContinue}
                   disabled={isProcessing}
-                  className="bg-[#9333EA] hover:bg-[#a855f7] text-white text-sm font-medium px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors min-w-[120px] disabled:opacity-70 flex-1 md:flex-none"
+                  className={clsx(
+                    "text-white text-sm font-medium px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors min-w-[120px] flex-1 md:flex-none",
+                    agentGoals.trim().length === 0 ? "bg-[#9333EA]/50 opacity-70 cursor-not-allowed" : "bg-[#9333EA] hover:bg-[#a855f7]"
+                  )}
                 >
                   {isProcessing ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

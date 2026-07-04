@@ -22,12 +22,24 @@ export const AppProvider: React.FC<{children: React.ReactNode}> = ({ children })
   const [kpis, setKpis] = useState<any>({ totalValue: "...", atRisk: "...", forecastAccuracy: "...", avgVelocity: "..." });
   const [dataSource, setDataSource] = useState("loading");
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const [agents, setAgents] = useState<AgentStatus[]>(agentsData);
+  const [agents, setAgents] = useState<AgentStatus[]>(() => {
+    try {
+      const stored = localStorage.getItem('bizmind_agents');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return agentsData; // fallback to seed data
+  });
   
   const [manualRiskOverride, setManualRiskOverride] = useState<number>(0);
 
   const deployAgent = useCallback((newAgent: AgentStatus) => {
-    setAgents(prev => [...prev, newAgent]);
+    setAgents(prev => {
+      const updated = [...prev, newAgent];
+      try {
+        localStorage.setItem('bizmind_agents', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   }, []);
 
   const loadData = useCallback(async () => {

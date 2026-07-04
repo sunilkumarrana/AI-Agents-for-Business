@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AgentActivityFeed } from '../components/AgentActivityFeed';
 import { DollarSign, AlertTriangle, Target, Clock, Bot, Globe, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
@@ -30,32 +30,48 @@ export const Dashboard: React.FC = () => {
   const { dealsAtRisk, deals, kpis } = useAppContext();
   const [insightsList, setInsightsList] = useState<any[]>([]);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const initialLoadRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
-    if (deals.length > 0 && insightsList.length === 0 && !isLoadingInsights) {
-      const loadInsights = async () => {
+    if (deals.length > 0) {
+      // Don't show global loader on every 5s background tick if we already have it
+      if (!initialLoadRef.current) {
         setIsLoadingInsights(true);
-        const context = buildPipelineContext(deals, kpis);
-        const result = await generateInsight(
-          `Analyse this pipeline and give me the 3 most important insights a sales manager needs to know right now. Focus on risk, opportunity, and velocity.`,
-          context
-        );
+        initialLoadRef.current = true;
+      }
+      
+      const context = buildPipelineContext(deals, kpis);
+      generateInsight(
+        `Analyse this pipeline and give me the 3 most important insights a sales manager needs to know right now. Focus on risk, opportunity, and velocity.`,
+        context
+      ).then(result => {
         if (mounted && result.success) {
-          setInsightsList([{
-            id: Date.now(),
-            agent: "InsightGeneratorAgent",
-            timestamp: "Just now",
-            message: result.text,
-            isAI: true
-          }]);
+          setInsightsList(prev => {
+            const newList = [...prev];
+            const insightObj = {
+              id: 'live-pipeline-insight',
+              agent: "InsightGeneratorAgent",
+              timestamp: "Just now",
+              message: result.text,
+              isAI: true
+            };
+            
+            const existingIndex = newList.findIndex(i => i.id === 'live-pipeline-insight');
+            if (existingIndex >= 0) {
+              newList[existingIndex] = insightObj;
+            } else {
+              // Add to bottom
+              newList.push(insightObj);
+            }
+            return newList;
+          });
         }
         if (mounted) setIsLoadingInsights(false);
-      };
-      loadInsights();
+      });
     }
     return () => { mounted = false; };
-  }, [deals, kpis, insightsList.length, isLoadingInsights]);
+  }, [deals, kpis]); // Removed insightsList dependency by just setting loading false unconditionally
 
   const fetchMarketIntel = async () => {
     setIsLoadingInsights(true);

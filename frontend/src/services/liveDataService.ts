@@ -15,16 +15,54 @@ const MOCK_DEALS: (Deal & { probability: number; rep: string; source: string })[
   { id: '10', name: 'Infrastructure Overhaul', company: 'Tyrell Corp', stage: 'Negotiation', value: 1500000, daysInStage: 7, health: 'healthy', recommendation: 'Send contract draft', probability: 0.78, rep: "Marcus Reid", source: "mock" }
 ];
 
+const HEALTH_RECOMMENDATIONS: Record<string, string[]> = {
+  'healthy': ['Send contract draft', 'Send follow-up deck', 'Verify champion', 'Prepare custom demo', 'Initiate onboarding'],
+  'watch': ['Schedule technical review', 'Review pricing with Deal Desk', 'Confirm executive alignment', 'Check competitor presence'],
+  'at-risk': ['Escalate to VP Sales', 'Offer discount on term', 'Re-engage executive sponsor', 'Urgent check-in call']
+};
+
+let liveDealsState = [...MOCK_DEALS];
+let hasInitializedFromHubSpot = false;
+
 export async function getDeals() {
-  const hubspotDeals = await fetchHubSpotDeals();
-  
-  if (hubspotDeals && hubspotDeals.length > 0) {
-    console.log("✅ Using live HubSpot data:", hubspotDeals.length, "deals");
-    return { deals: hubspotDeals, source: "hubspot_live" };
+  if (!hasInitializedFromHubSpot) {
+    const hubspotDeals = await fetchHubSpotDeals();
+    if (hubspotDeals && hubspotDeals.length > 0) {
+      console.log("✅ Using live HubSpot data:", hubspotDeals.length, "deals");
+      liveDealsState = [...hubspotDeals];
+      hasInitializedFromHubSpot = true;
+    } else {
+      console.log("⚠️ HubSpot unavailable — using simulated mock data");
+    }
   }
   
-  console.log("⚠️ HubSpot unavailable — using mock data");
-  return { deals: MOCK_DEALS, source: "mock" };
+  // Add live simulation jitter to persistent working state
+  liveDealsState = liveDealsState.map(deal => {
+    let health = deal.health;
+    
+    // Occasionally flip health status (but never for closed deals)
+    if (Math.random() > 0.85 && deal.stage !== 'Closed') {
+      const statuses = ['healthy', 'watch', 'at-risk'] as const;
+      health = statuses[Math.floor(Math.random() * statuses.length)] as 'healthy' | 'watch' | 'at-risk';
+    }
+
+    // Update recommendation if health changed
+    let recommendation = deal.recommendation;
+    if (health !== deal.health || Math.random() > 0.9) {
+      const recs = HEALTH_RECOMMENDATIONS[health] || HEALTH_RECOMMENDATIONS['healthy'];
+      recommendation = recs[Math.floor(Math.random() * recs.length)];
+    }
+
+    return {
+      ...deal,
+      value: Math.max(0, deal.value + (Math.floor(Math.random() * 20000) - 10000)), // fluctuate +/- 10k
+      daysInStage: Math.max(1, deal.daysInStage + (Math.random() > 0.7 ? 1 : (Math.random() > 0.9 ? -1 : 0))),
+      health,
+      recommendation
+    };
+  });
+  
+  return { deals: liveDealsState, source: hasInitializedFromHubSpot ? "hubspot_live" : "mock" };
 }
 
 export function calculateKPIs(deals: any[]) {
@@ -37,7 +75,7 @@ export function calculateKPIs(deals: any[]) {
     : 84;
   
   const avgVelocity = Math.round(
-    deals.reduce((sum, d) => sum + d.daysInStage, 0) / deals.length
+    deals.reduce((sum, d) => sum + d.daysInStage, 0) / Math.max(1, deals.length)
   );
 
   return {
@@ -70,7 +108,7 @@ ${deals.map((d, i) => `${i+1}. "${d.name}" | Company: ${d.company} | Stage: ${d.
 
 export function startDataRefresh(callback: () => void) {
   callback(); 
-  const interval = setInterval(callback, 5 * 60 * 1000);
+  const interval = setInterval(callback, 5000);
   return () => clearInterval(interval); 
 }
 

@@ -1,5 +1,5 @@
 
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
 import { Dashboard } from './pages/Dashboard';
@@ -13,7 +13,7 @@ import { AppProvider } from './contexts/AppContext';
 function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
+      <Router>
         <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route element={<Layout />}>
@@ -25,7 +25,7 @@ function App() {
         </Route>
       </Routes>
       <BizMindChatbot />
-    </BrowserRouter>
+      </Router>
     </AppProvider>
   );
 }
