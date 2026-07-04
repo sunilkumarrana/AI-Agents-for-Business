@@ -116,62 +116,87 @@ function formatAssistantText(text: string): React.ReactNode[] {
 }
 
 function smartLocalResponse(userMessage: string, ctx: DashboardContextType): string {
-  const msg = userMessage.toLowerCase().trim();
-  
+  const q = userMessage.toLowerCase().trim();
+  const PIPELINE_DEALS = ctx.pipeline;
+  const AT_RISK_DEALS = PIPELINE_DEALS.filter(d => d.health === 'At-Risk');
+  const WATCH_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Watch');
+  const HEALTHY_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Healthy');
+  const STALE_DEALS = PIPELINE_DEALS.filter(d => d.days >= 14);
+
+  const parseValue = (valStr: string) => parseInt(valStr.replace(/[^0-9]/g, ''), 10) || 0;
+
   // Greetings
-  if (/^(h+i+|hey+|hello+|hiya|howdy|greetings|good\s+(morning|afternoon|evening)|what'?s\s*up|sup|yo)[\s!?.,]*$/i.test(msg)) {
+  if (/^(h+i+|hey+|hello+|hiya|howdy|greetings|good\s+(morning|afternoon|evening)|what'?s\s*up|sup|yo|namaste|helo|hii+)[\s!?.,]*$/i.test(q)) {
     return "Hello! How can I help you today?";
   }
-  
-  // Introductions
-  const introMatch = msg.match(/^(?:i'm|i am|my name is)\s+([a-z]+)[\s!?.,]*$/i);
-  if (introMatch) {
-    const name = introMatch[1];
-    const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
-    return `Nice to meet you, ${capitalized}! I'm BizMind AI. How can I help you with your pipeline today?`;
-  }
-  
-  // At-risk deals
-  if (msg.includes("risk") || msg.includes("at risk")) {
-    const atRisk = ctx.pipeline.filter((d) => d.health === 'At-Risk');
-    if (atRisk.length === 0) {
-      return "Good news! There are currently no deals marked as at-risk in your pipeline.";
-    }
-    
-    let res = `You have **${atRisk.length}** deals currently at risk. Here are the details:\n`;
-    atRisk.forEach((d) => {
-      res += `- **${d.deal} (${d.company})**: ${d.value} in stage ${d.stage}. **Recommendation**: ${d.recommendation}\n`;
-    });
-    return res;
-  }
-  
-  // Summary
-  if (msg.includes("summary") || msg.includes("overview")) {
-    return `Here is a summary of your current pipeline:\n- **Total Pipeline Value**: ${ctx.totalPipelineValue}\n- **Deals at Risk**: ${ctx.dealsAtRisk}\n- **Forecast Accuracy**: ${ctx.forecastAccuracy}\n- **Average Deal Velocity**: ${ctx.avgDealVelocity}\n\nLet me know if you want to dive deeper into any of these metrics.`;
+
+  // Small talk
+  if (/how are you|how('?re| are) (you|things)|you ok/i.test(q)) {
+    return "Doing great, thanks! Ready to help with your pipeline. What would you like to know?";
   }
 
-  // Top rep performance
-  if (msg.includes("top rep") || msg.includes("performance") || msg.includes("rep")) {
-    return "Based on recent data, Sarah Jenkins is your top performing rep this quarter with $1.2M in closed-won deals, followed by Marcus Johnson with $950K. They are both converting at an above-average rate of 34%.";
+  // What can you do
+  if (/what (can|do) you (do|help|know)|your (capabilities|features)|help( me)?$|how (do|can) (i|you)/i.test(q)) {
+    return "I can help you with:\n- Which deals are at risk\n- Full pipeline data and value\n- Q3 forecast and revenue projections\n- Rep performance breakdown\n- Stale and inactive deals\n- Specific company deal details\n- Executive pipeline summary\n- Next recommended actions\n\nJust ask naturally!";
   }
-  
-  // Forecast
-  if (msg.includes("forecast") || msg.includes("q3") || msg.includes("q4")) {
-    return `Your current forecast accuracy is **${ctx.forecastAccuracy}**. You have a total pipeline value of **${ctx.totalPipelineValue}**. With an average deal velocity of ${ctx.avgDealVelocity}, you are on track to meet your baseline targets, though closing the ${ctx.dealsAtRisk} at-risk deals would provide a comfortable buffer.`;
+
+  // Pipeline data / show all / give me data
+  if (/pipeline|all deals?|give|show|tell|data|list|full|complete|overview|what('?s| is| are)|summary|summar/i.test(q)) {
+    const atRiskTotal = AT_RISK_DEALS.reduce((s,d)=>s+parseValue(d.value),0);
+    return `**Pipeline Overview**\n\n- Total Value: ${ctx.totalPipelineValue} across ${PIPELINE_DEALS.length} deals\n- At-Risk: ${AT_RISK_DEALS.length} deals ($${(atRiskTotal/1000).toFixed(0)}K at risk)\n- Watch: ${WATCH_DEALS.length} deals need attention\n- Healthy: ${HEALTHY_DEALS.length} deals on track\n- Stale (14+ days): ${STALE_DEALS.length} deals\n\n**At-Risk Deals:**\n${AT_RISK_DEALS.map(d=>`- ${d.deal} (${d.company}): ${d.recommendation}`).join('\n')}\n\n**Watch Deals:**\n${WATCH_DEALS.map(d=>`- ${d.deal} (${d.company}): ${d.recommendation}`).join('\n')}`;
   }
-  
-  // Pipeline details catch-all
-  if (/pipeline|data|deals?|show|give|tell|all|list|overview|what('?s| is)/i.test(msg)) {
-    const PIPELINE_DEALS = ctx.pipeline;
-    const AT_RISK_DEALS = ctx.pipeline.filter(d => d.health === 'At-Risk');
-    const WATCH_DEALS = ctx.pipeline.filter(d => d.health === 'Watch');
-    const HEALTHY_DEALS = ctx.pipeline.filter(d => d.health === 'Healthy');
-    
-    return `Here's your current pipeline overview:\n\n- Total Value: ${ctx.totalPipelineValue} across ${PIPELINE_DEALS.length} deals\n- At-Risk: ${AT_RISK_DEALS.length} deals\n- Watch: ${WATCH_DEALS.length} deals\n- Healthy: ${HEALTHY_DEALS.length} deals\n\nTop at-risk deals:\n${AT_RISK_DEALS.slice(0, 3).map(d => `- **${d.deal}** (${d.company}): ${d.recommendation}`).join('\n')}\n\nAsk me about specific deals, forecasts, or rep performance for more detail.`;
+
+  // At-risk
+  if (/at.?risk|risk|danger|stall|stuck|problem|issue|concern|worried|bad/i.test(q)) {
+    const totalAtRisk = AT_RISK_DEALS.reduce((s,d)=>s+parseValue(d.value),0);
+    return `You have ${AT_RISK_DEALS.length} at-risk deals totalling $${(totalAtRisk/1000).toFixed(0)}K:\n\n${AT_RISK_DEALS.map(d=>`- **${d.deal}** (${d.company}) — ${d.stage}, ${d.value}, ${d.days} days\n  → ${d.recommendation}`).join('\n\n')}\n\nHighest priority: escalate Acme Corp to VP Sales immediately.`;
   }
-  
-  // Default fallback
-  return "I can answer questions like:\n- Which deals are at risk?\n- What is the pipeline value?\n- Show forecast Q3\n- Top rep performance\n- Summarize the pipeline\n- Tell me about Acme Corp\n\nWhat would you like to know?";
+
+  // Forecast / revenue / Q3
+  if (/forecast|q3|quarter|revenue|predict|projection|target|number/i.test(q)) {
+    const committed = PIPELINE_DEALS.filter(d=>["Negotiation","Closed"].includes(d.stage));
+    const committedTotal = committed.reduce((s,d)=>s+parseValue(d.value),0);
+    return `**Q3 Forecast**\n\n- Forecast Accuracy: ${ctx.forecastAccuracy}\n- Committed Pipeline: $${(committedTotal/1000000).toFixed(1)}M\n- Total Pipeline: ${ctx.totalPipelineValue}\n- At-Risk: ${AT_RISK_DEALS.length} deals may slip\n\nRecommendation: Address the ${AT_RISK_DEALS.length} at-risk deals to protect Q3 numbers.`;
+  }
+
+  // Rep performance
+  if (/rep|perform|salesperson|person|who|team|sarah|marcus|priya|james|best|top|leader/i.test(q)) {
+    return `**Rep Performance by Pipeline Value:**\n\n1. Sarah Jenkins: $1,200K\n2. Marcus Johnson: $950K\n3. Priya Patel: $820K\n\nTop performer: **Sarah Jenkins** at $1,200K`;
+  }
+
+  // Stale deals
+  if (/stale|old|inactive|movement|activity|update|reply|response|overdue|long|days/i.test(q)) {
+    return `${STALE_DEALS.length} deals stale for 14+ days:\n\n${STALE_DEALS.map(d=>`- **${d.deal}** (${d.company}) — ${d.days} days in ${d.stage}\n  → ${d.recommendation}`).join('\n\n')}`;
+  }
+
+  // Recommendations
+  if (/recommend|next|action|should|priority|urgent|important|do|focus/i.test(q)) {
+    return `**Top 3 Recommended Actions:**\n\n1. Escalate **Acme Corp** (Q3 Enterprise Expansion) to VP Sales — 18 days stalled\n2. Re-engage **Cyberdyne** (Analytics Expansion) executive sponsor — at-risk\n3. Offer discount to **Wayne Ent.** (API Integration) — 21 days in Negotiation`;
+  }
+
+  // Specific company lookup
+  const matchedDeal = PIPELINE_DEALS.find(d => {
+    const dealWords = d.deal.toLowerCase().split(" ");
+    return q.includes(d.company.toLowerCase()) || 
+           (dealWords[0] && q.includes(dealWords[0])) || 
+           (dealWords[1] && q.includes(dealWords[1]));
+  });
+  if (matchedDeal) {
+    return `**${matchedDeal.deal}** (${matchedDeal.company})\n- Stage: ${matchedDeal.stage}\n- Value: ${matchedDeal.value}\n- Days in stage: ${matchedDeal.days}\n- Health: ${matchedDeal.health}\n\nRecommendation: ${matchedDeal.recommendation}`;
+  }
+
+  // Watch deals
+  if (/watch|amber|caution|monitor|careful|attention/i.test(q)) {
+    return `${WATCH_DEALS.length} deals need watching:\n\n${WATCH_DEALS.map(d=>`- **${d.deal}** (${d.company}): ${d.recommendation}`).join('\n')}`;
+  }
+
+  // Healthy deals
+  if (/health(y)?|good|green|fine|ok|well|strong/i.test(q)) {
+    return `${HEALTHY_DEALS.length} healthy deals on track:\n\n${HEALTHY_DEALS.map(d=>`- **${d.deal}** (${d.company}) — ${d.stage}, ${d.value}`).join('\n')}`;
+  }
+
+  // Default - still helpful
+  return `I can help with your pipeline! Try asking:\n- "Which deals are at risk?"\n- "Show me the full pipeline"\n- "Forecast Q3"\n- "Top rep performance"\n- "Tell me about Acme Corp"\n- "What deals are stale?"\n- "What should I do next?"`;
 }
 
 // ---------------------------------------------------------------------------
