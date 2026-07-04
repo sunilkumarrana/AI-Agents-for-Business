@@ -1,598 +1,309 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
-/**
- * BizMind AI Chatbot
- * -------------------
- * Complete AI Assistant powered by Gemini API with local fallback.
- */
-
+// API CONFIG
 const GEMINI_MODEL = "gemini-2.0-flash";
-const GEMINI_ENDPOINT = (apiKey: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+const GEMINI_ENDPOINT = (k: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${k}`;
 
 function getApiKey(): string | null {
-  if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) {
-    return import.meta.env.VITE_GEMINI_API_KEY as string;
-  }
+  try {
+    const k = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (k && k !== "your_key_here" && k.length > 10) return k;
+  } catch {}
   return null;
 }
 
-const SYSTEM_PROMPT = `You are BizMind AI Assistant — a powerful, friendly AI assistant embedded in an enterprise sales pipeline platform. You have two roles:
-
-ROLE 1 - GENERAL AI ASSISTANT:
-You can answer ANY question on any topic like a knowledgeable assistant. Be helpful, accurate, and conversational. Handle all types of messages including greetings, small talk, general knowledge, and follow-up questions.
-
-ROLE 2 - BIZMIND PLATFORM EXPERT:
-You have complete knowledge of the BizMind AI platform including all deals, agents, features, and data provided in the context below. Use this data to give specific, accurate answers about the pipeline.
-
-PERSONALITY:
-- Friendly, professional, and concise
-- Use the user's name when known
-- Add relevant emojis for visual clarity
-- Always be helpful — never refuse a reasonable question
-- Handle poor/broken English by understanding the intent
-- For pipeline questions, always end with a clear recommended action`;
-
-const SUGGESTED_CHIPS_ROW1 = [
-  "Which deals are at risk?",
-  "Forecast Q3",
-  "Top rep performance",
-  "Generate summary"
-];
-const SUGGESTED_CHIPS_ROW2 = [
-  "What is BizMind AI?",
-  "Show all agents",
-  "Stale deals",
-  "Recommend actions"
+// PIPELINE DATA
+const DEALS = [
+  { id:"1", name:"Q3 Enterprise Expansion", company:"Acme Corp",       stage:"Negotiation",   value:850000,  days:18, health:"at-risk", rec:"Escalate to VP Sales",            rep:"Sarah Chen" },
+  { id:"2", name:"Global Rollout Phase 1",  company:"Globex Inc",      stage:"Proposal",      value:1200000, days:4,  health:"healthy",  rec:"Send follow-up deck",             rep:"Marcus Reid" },
+  { id:"3", name:"Data Center Upgrade",     company:"Initech",         stage:"Demo",          value:450000,  days:12, health:"watch",    rec:"Schedule technical review",       rep:"Priya Nair" },
+  { id:"4", name:"Security Suite Renewal",  company:"Umbrella Corp",   stage:"Qualification", value:180000,  days:2,  health:"healthy",  rec:"Verify champion",                 rep:"Sarah Chen" },
+  { id:"5", name:"Cloud Migration",         company:"Stark Ind.",      stage:"Closed",        value:2100000, days:1,  health:"healthy",  rec:"Initiate onboarding",             rep:"James Wu" },
+  { id:"6", name:"API Integration",         company:"Wayne Ent.",      stage:"Negotiation",   value:320000,  days:21, health:"at-risk",  rec:"Offer discount on term",          rep:"Marcus Reid" },
+  { id:"7", name:"Platform Licensing",      company:"Massive Dynamic", stage:"Proposal",      value:950000,  days:9,  health:"watch",    rec:"Review pricing with Deal Desk",   rep:"Priya Nair" },
+  { id:"8", name:"Managed Services",        company:"Soylent Corp",    stage:"Demo",          value:275000,  days:5,  health:"healthy",  rec:"Prepare custom demo",             rep:"Sarah Chen" },
+  { id:"9", name:"Analytics Expansion",     company:"Cyberdyne",       stage:"Qualification", value:410000,  days:14, health:"at-risk",  rec:"Re-engage executive sponsor",     rep:"James Wu" },
+  { id:"10",name:"Infrastructure Overhaul", company:"Tyrell Corp",     stage:"Negotiation",   value:1500000, days:7,  health:"healthy",  rec:"Send contract draft",             rep:"Marcus Reid" },
 ];
 
-// ---------------------------------------------------------------------------
-// HARDCODED DATA
-// ---------------------------------------------------------------------------
+const TOTAL    = DEALS.reduce((s,d)=>s+d.value,0);
+const AT_RISK  = DEALS.filter(d=>d.health==="at-risk");
+const WATCH    = DEALS.filter(d=>d.health==="watch");
+const HEALTHY  = DEALS.filter(d=>d.health==="healthy");
+const STALE    = DEALS.filter(d=>d.days>14);
+const K = (n:number) => `$${(n/1000).toFixed(0)}K`;
+const M = (n:number) => `$${(n/1000000).toFixed(1)}M`;
 
-const PIPELINE_DEALS = [
-  { name: "Q3 Enterprise Expansion", company: "Acme Corp", stage: "Negotiation", value: 850000, days: 18, health: "At-Risk", rep: "Marcus Reid", recommendation: "Escalate to VP Sales immediately." },
-  { name: "Global Rollout Phase 1", company: "Globex Inc", stage: "Proposal", value: 1200000, days: 4, health: "Healthy", rep: "Sarah Jenkins", recommendation: "Send follow-up deck." },
-  { name: "Data Center Upgrade", company: "Initech", stage: "Demo", value: 450000, days: 12, health: "Watch", rep: "Priya Patel", recommendation: "Schedule technical review." },
-  { name: "Security Suite Renewal", company: "Umbrella Corp", stage: "Qualification", value: 180000, days: 2, health: "Healthy", rep: "Marcus Reid", recommendation: "Verify champion." },
-  { name: "Cloud Migration", company: "Stark Ind.", stage: "Closed", value: 2100000, days: 1, health: "Healthy", rep: "Sarah Jenkins", recommendation: "Initiate onboarding." },
-  { name: "API Integration", company: "Wayne Ent.", stage: "Negotiation", value: 320000, days: 21, health: "At-Risk", rep: "Priya Patel", recommendation: "Deploy competitor battlecard." },
-  { name: "Platform Licensing", company: "Massive Dynamic", stage: "Proposal", value: 950000, days: 9, health: "Watch", rep: "Marcus Reid", recommendation: "Review pricing with Deal Desk." },
-  { name: "Managed Services", company: "Soylent Corp", stage: "Demo", value: 275000, days: 5, health: "Healthy", rep: "Sarah Jenkins", recommendation: "Prepare custom demo." },
-  { name: "Analytics Expansion", company: "Cyberdyne", stage: "Qualification", value: 410000, days: 14, health: "At-Risk", rep: "Priya Patel", recommendation: "Re-engage executive sponsor." },
-  { name: "Infrastructure Overhaul", company: "Tyrell Corp", stage: "Negotiation", value: 1500000, days: 7, health: "Healthy", rep: "Marcus Reid", recommendation: "Send contract draft." }
-];
+// LOCAL RESPONSE ENGINE
+function localReply(input: string): string {
+  // normalize: lowercase, remove punctuation, trim
+  const q = input.toLowerCase().replace(/[^\w\s]/g," ").trim();
+  const words = q.split(/\s+/);
+  const has = (...terms: string[]) => terms.some(t => q.includes(t));
 
-const AT_RISK_DEALS = PIPELINE_DEALS.filter(d => d.health === 'At-Risk');
-const WATCH_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Watch');
-const HEALTHY_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Healthy');
-const STALE_DEALS = PIPELINE_DEALS.filter(d => d.days >= 14);
-const TOTAL_PIPELINE = PIPELINE_DEALS.reduce((s, d) => s + d.value, 0);
+  // 1. PURE GREETING — only if message is 1-2 words and is a greeting word
+  const greetWords = ["hi","hii","hiii","hey","hello","helo","heya","hiya","yo","sup","howdy","namaste","greetings"];
+  if (words.length <= 3 && words.some(w => greetWords.includes(w))) {
+    return "Hello! How can I help you today? 👋";
+  }
 
-const buildContextBlock = () => `
-ABOUT THIS APP:
-- Name: BizMind AI
-- Purpose: Enterprise autonomous revenue operations platform
-- AI Agents: PipelineAnalystAgent (pipeline health), InsightGeneratorAgent (business insights), AlertManagerAgent (threshold monitoring), ReportBuilderAgent (report generation)
-- Features: Live pipeline dashboard, active alerts with human-in-the-loop approval, executive reports, agent builder, real-time deal monitoring
+  // 2. PERSONAL INTRO
+  if (has("i am","i'm","my name","call me","myself")) {
+    const m = q.match(/(?:i am|i'm|my name is|call me|myself)\s+(\w+)/);
+    const name = m ? m[1].charAt(0).toUpperCase()+m[1].slice(1) : "there";
+    return `Nice to meet you, ${name}! 😊 I'm BizMind AI — your pipeline copilot. How can I help you today?`;
+  }
 
-CURRENT PIPELINE DATA:
-- Total Pipeline Value: $${(TOTAL_PIPELINE/1000000).toFixed(1)}M
-- Total Active Deals: ${PIPELINE_DEALS.length}
-- At-Risk Deals: ${AT_RISK_DEALS.length} — ${AT_RISK_DEALS.map(d=>d.name+' ('+d.company+')').join(', ')}
-- Watch Deals: ${WATCH_DEALS.length} — ${WATCH_DEALS.map(d=>d.name+' ('+d.company+')').join(', ')}
-- Healthy Deals: ${HEALTHY_DEALS.length}
-- Stale Deals (14+ days no movement): ${STALE_DEALS.length}
-- Forecast Accuracy: 100%
-- Avg Deal Velocity: 9 days
+  // 3. WHO ARE YOU / WHAT ARE YOU
+  if (has("who are you","what are you","who r you","who is this","are you ai","are you bot","about you","your name","introduce")) {
+    return "I'm **BizMind AI** 🤖 — an autonomous revenue operations assistant built into this enterprise sales pipeline platform.\n\nI'm powered by a swarm of AI agents that monitor deals, flag risks, generate forecasts, and recommend actions in real time. I can also answer any question about your pipeline or this platform!\n\nWhat would you like to know?";
+  }
 
-FULL DEAL TABLE:
-${PIPELINE_DEALS.map(d=>
-  d.name+' | '+d.company+' | Stage: '+d.stage+' | Value: $'+(d.value/1000).toFixed(0)+'K | Days: '+d.days+' | Health: '+d.health+' | Owner: '+d.rep+' | Action: '+d.recommendation
-).join('\n')}
+  // 4. WHAT IS THIS APP
+  if (has("what is this","what is bizmind","about this","about bizmind","what does this","what this app","explain this","what does bizmind","this platform","this website","this app","this tool","this dashboard")) {
+    return "**BizMind AI** is an enterprise revenue operations platform 🏢\n\nIt uses a swarm of specialized AI agents:\n- 🟢 **PipelineAnalystAgent** — monitors deal health\n- 💡 **InsightGeneratorAgent** — generates business insights\n- 🔔 **AlertManagerAgent** — monitors risk thresholds\n- 📊 **ReportBuilderAgent** — assembles executive reports\n\nKey features: Live pipeline dashboard, human-in-the-loop alerts, executive reports, and a custom agent builder.\n\nTotal pipeline value currently: **${M(TOTAL)}** across ${DEALS.length} active deals.";
+  }
 
-REP PERFORMANCE:
-${Object.entries(PIPELINE_DEALS.reduce((acc:any,d)=>{acc[d.rep]=(acc[d.rep]||0)+d.value;return acc},{})).sort((a:any,b:any)=>b[1]-a[1]).map(([rep,val]:any)=>rep+': $'+(val/1000).toFixed(0)+'K').join('\n')}
-`;
+  // 5. HOW ARE YOU
+  if (has("how are you","how r you","how you doing","you ok","you good","hows it")) {
+    return "I'm doing great, thanks for asking! 😊 Ready to help with your pipeline. What would you like to know?";
+  }
 
-// ---------------------------------------------------------------------------
-// HELPERS
-// ---------------------------------------------------------------------------
+  // 6. THANK YOU
+  if (has("thank","thanks","thx","ty ","tysm","appreciate")) {
+    return "You're welcome! 😊 Let me know if you need anything else.";
+  }
 
-function formatAssistantText(text: string): React.ReactNode[] {
-  const lines = text.split("\n");
-  return lines.map((line, i) => {
-    const trimmed = line.trim();
-    const isBullet = trimmed.startsWith("- ") || trimmed.startsWith("• ");
-    const content = isBullet ? trimmed.replace(/^[-•]\s*/, "") : line;
-    const parts = content.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-    const rendered = parts.map((part, j) =>
-      part.startsWith("**") && part.endsWith("**") ? (
-        <strong key={j} className="font-semibold text-white">
-          {part.slice(2, -2)}
-        </strong>
-      ) : (
-        <React.Fragment key={j}>{part}</React.Fragment>
-      )
+  // 7. BYE
+  if (words.length <= 3 && has("bye","goodbye","see you","cya","take care","later","farewell")) {
+    return "Goodbye! Good luck with your pipeline! 👋 Come back anytime.";
+  }
+
+  // 8. AT-RISK DEALS
+  if (has("at risk","at-risk","risk","risky","danger","bad deal","problem deal","issue","concern","urgent","critical","which deal")) {
+    return `⚠️ You have **${AT_RISK.length} at-risk deals** totalling ${K(AT_RISK.reduce((s,d)=>s+d.value,0))}:\n\n${AT_RISK.map(d=>`🔴 **${d.name}** (${d.company})\n   Stage: ${d.stage} | Value: ${K(d.value)} | ${d.days} days\n   → ${d.rec}`).join("\n\n")}\n\n**Priority action:** Escalate Acme Corp to VP Sales immediately.`;
+  }
+
+  // 9. STALE DEALS
+  if (has("stale","inactive","no movement","no activity","no update","overdue","stuck","not moving","14 days","old deal")) {
+    return `📌 **${STALE.length} stale deals** (14+ days without movement):\n\n${STALE.map(d=>`- **${d.name}** (${d.company}) — ${d.days} days in ${d.stage}\n  → ${d.rec}`).join("\n\n")}`;
+  }
+
+  // 10. REP PERFORMANCE
+  if (has("rep performance","top rep","best rep","rep breakdown","salesperson","sales team","who is best","performing","sarah","marcus","priya","james","team performance")) {
+    const repMap: Record<string,number> = {};
+    DEALS.forEach(d=>{ repMap[d.rep]=(repMap[d.rep]||0)+d.value; });
+    const sorted = Object.entries(repMap).sort((a,b)=>b[1]-a[1]);
+    return `📊 **Rep Performance by Pipeline Value:**\n\n${sorted.map(([rep,val],i)=>`${i+1}. **${rep}**: ${K(val)}`).join("\n")}\n\n🏆 Top performer: **${sorted[0][0]}** at ${K(sorted[0][1])}`;
+  }
+
+  // 11. FORECAST / Q3 / REVENUE
+  if (has("forecast","q3","quarter","revenue","projection","predict","target","number","how much","financial")) {
+    const committed = DEALS.filter(d=>["Negotiation","Closed"].includes(d.stage));
+    return `📈 **Q3 Revenue Forecast:**\n\n- Forecast Accuracy: **100%**\n- Committed Pipeline: **${M(committed.reduce((s,d)=>s+d.value,0))}**\n- Total Pipeline: **${M(TOTAL)}**\n- At-Risk: **${AT_RISK.length} deals** may slip\n- Avg Deal Velocity: **9 days**\n\n→ **Action:** Address ${AT_RISK.length} at-risk deals to protect Q3 numbers.`;
+  }
+
+  // 12. RECOMMENDATIONS / NEXT ACTIONS
+  if (has("recommend","next step","what should","action","priority","what do i do","what to do","focus","urgent","important","suggest","advice","help me","what now")) {
+    return `💡 **Top 3 Recommended Actions Right Now:**\n\n1. 🔴 Escalate **Acme Corp** (Q3 Enterprise Expansion) to VP Sales — 18 days stalled in Negotiation\n2. 🔴 Re-engage **Cyberdyne** (Analytics Expansion) executive sponsor — at-risk for 14 days\n3. 🔴 Offer discount on term to **Wayne Ent.** (API Integration) — 21 days in Negotiation at-risk`;
+  }
+
+  // 13. SPECIFIC COMPANY LOOKUP
+  const found = DEALS.find(d=>
+    q.includes(d.company.toLowerCase()) ||
+    q.includes(d.name.toLowerCase().split(" ")[0]) ||
+    q.includes(d.name.toLowerCase().split(" ")[1]||"___")
+  );
+  if (found) {
+    const icon = found.health==="at-risk"?"🔴":found.health==="watch"?"🟡":"🟢";
+    return `${icon} **${found.name}** — ${found.company}\n\n- Stage: ${found.stage}\n- Value: ${K(found.value)}\n- Days in stage: ${found.days}\n- Health: **${found.health}**\n- Owner: ${found.rep}\n\n→ **Recommendation:** ${found.rec}`;
+  }
+
+  // 14. WATCH DEALS
+  if (has("watch","amber","caution","monitor","careful","attention","warning")) {
+    return `🟡 **${WATCH.length} deals need watching:**\n\n${WATCH.map(d=>`- **${d.name}** (${d.company}): ${d.rec}`).join("\n")}`;
+  }
+
+  // 15. HEALTHY DEALS
+  if (has("healthy","green","good deal","on track","fine","strong","healthy deal")) {
+    return `🟢 **${HEALTHY.length} healthy deals on track:**\n\n${HEALTHY.map(d=>`- **${d.name}** (${d.company}) — ${d.stage}, ${K(d.value)}`).join("\n")}`;
+  }
+
+  // 16. AGENTS
+  if (has("agent","pipeline analyst","insight generator","alert manager","report builder","swarm","bot","ai agent")) {
+    return `🤖 **Active Agent Swarm:**\n\n1. **PipelineAnalystAgent** 🟢 Active\n   Tools: get_pipeline_summary(), flag_stale_deals(), calculate_forecast()\n\n2. **InsightGeneratorAgent** 💤 Idle\n   Tools: generate_executive_summary(), identify_trends(), suggest_actions()\n\n3. **AlertManagerAgent** 🟡 Standby\n   Tools: check_deal_health(), send_alert(), set_threshold()\n\n4. **ReportBuilderAgent** 💤 Idle\n   Tools: build_weekly_report(), export_to_pdf(), schedule_report()`;
+  }
+
+  // 17. GENERAL PIPELINE / DATA / OVERVIEW (broad catch-all — LAST)
+  if (has("pipeline","deal","data","show","give","tell","list","all","overview","full","complete","summary","summar","dashboard","what is","what are","how many")) {
+    const atRiskTotal = AT_RISK.reduce((s,d)=>s+d.value,0);
+    return `📊 **Pipeline Overview:**\n\n- Total Value: **${M(TOTAL)}** across ${DEALS.length} deals\n- 🔴 At-Risk: **${AT_RISK.length} deals** (${K(atRiskTotal)})\n- 🟡 Watch: **${WATCH.length} deals** need attention\n- 🟢 Healthy: **${HEALTHY.length} deals** on track\n- 📌 Stale: **${STALE.length} deals** (14+ days)\n- Forecast Accuracy: **100%**\n\n**At-Risk Deals:**\n${AT_RISK.map(d=>`🔴 ${d.name} (${d.company}): ${d.rec}`).join("\n")}\n\n**Watch Deals:**\n${WATCH.map(d=>`🟡 ${d.name} (${d.company}): ${d.rec}`).join("\n")}`;
+  }
+
+  // 18. FINAL FALLBACK
+  return `I'm your BizMind AI pipeline assistant! 🤖 I can help with:\n\n- 📊 "Which deals are at risk?"\n- 📈 "Forecast Q3"\n- 👥 "Top rep performance"\n- 📋 "Generate summary"\n- 🏢 "Tell me about Acme Corp"\n- 🤖 "Show all agents"\n- ⚡ "What should I do next?"\n\nWhat would you like to know?`;
+}
+
+// GEMINI API CALL
+async function callGemini(history: {role:string;text:string}[], userMsg: string): Promise<string> {
+  const key = getApiKey();
+  if (!key) throw new Error("no_key");
+
+  const ctx = `PIPELINE: Total=${M(TOTAL)}, AtRisk=${AT_RISK.length}, Watch=${WATCH.length}, Healthy=${HEALTHY.length}, Stale=${STALE.length}. Deals: ${DEALS.map(d=>`${d.name}(${d.company},${d.stage},${K(d.value)},${d.days}d,${d.health})`).join("; ")}`;
+
+  const system = `You are BizMind AI — a friendly, knowledgeable assistant for an enterprise sales pipeline platform. Answer ANY question helpfully. For pipeline questions use the data provided. For greetings respond warmly. For "who are you" explain you are BizMind AI. Never mention API keys or technical details. Keep answers concise with emojis where helpful.\n\n${ctx}`;
+
+  const contents = [
+    ...history.slice(1).map(m=>({ role: m.role==="assistant"?"model":"user", parts:[{text:m.text}] })),
+    { role:"user", parts:[{text:userMsg}] }
+  ];
+
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), 12000);
+
+  try {
+    const res = await fetch(GEMINI_ENDPOINT(key), {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        system_instruction:{parts:[{text:system}]},
+        contents,
+        generationConfig:{temperature:0.7, maxOutputTokens:500}
+      }),
+      signal: ctrl.signal
+    });
+    clearTimeout(t);
+    if (!res.ok) { console.error("Gemini status:", res.status); throw new Error("api_error"); }
+    const data = await res.json();
+    const reply = data?.candidates?.[0]?.content?.parts?.map((p:any)=>p.text).join("")?.trim();
+    if (!reply) throw new Error("empty");
+    return reply;
+  } catch(e) {
+    clearTimeout(t);
+    console.error("Gemini failed:", e);
+    throw e;
+  }
+}
+
+// TEXT FORMATTER
+function fmt(text: string) {
+  return text.split("\n").map((line,i)=>{
+    const t = line.trim();
+    const isBullet = t.startsWith("- ") || t.startsWith("• ");
+    const content = isBullet ? t.replace(/^[-•]\s*/,"") : line;
+    const parts = content.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((p,j)=>
+      p.startsWith("**")&&p.endsWith("**")
+        ? <strong key={j} className="font-semibold text-white">{p.slice(2,-2)}</strong>
+        : <React.Fragment key={j}>{p}</React.Fragment>
     );
-    if (isBullet) {
-      return (
-        <li key={i} className="ml-4 list-disc text-slate-200 leading-relaxed">
-          {rendered}
-        </li>
-      );
-    }
-    if (trimmed === "") return <br key={i} />;
-    return (
-      <p key={i} className="text-slate-200 leading-relaxed">
-        {rendered}
-      </p>
-    );
+    if (isBullet) return <li key={i} className="ml-4 list-disc text-slate-200 leading-relaxed">{parts}</li>;
+    if (t==="") return <br key={i}/>;
+    return <p key={i} className="text-slate-200 leading-relaxed">{parts}</p>;
   });
 }
 
-function extractName(text: string): string | null {
-  const match = text.match(/^(i m|im|i am|my name is)\s+([a-z0-9_\s]+)/i);
-  if (match && match[2]) {
-    const raw = match[2].trim();
-    return raw.charAt(0).toUpperCase() + raw.slice(1);
-  }
-  return null;
-}
+const CHIPS = [
+  "Which deals are at risk?","Forecast Q3",
+  "Top rep performance","Generate summary",
+  "What is BizMind AI?","Show all agents",
+  "Stale deals","Recommend actions"
+];
 
-// ---------------------------------------------------------------------------
-// MAIN COMPONENT
-// ---------------------------------------------------------------------------
-
-interface Message {
-  role: "user" | "assistant";
-  text: string;
-  timestamp: string;
-}
+interface Msg { role:"user"|"assistant"; text:string; }
 
 export default function BizMindChatbot() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [userName, setUserName] = useState<string>("");
-  
-  const getTimestamp = () => {
-    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  const [open,setOpen]       = useState(false);
+  const [msgs,setMsgs]       = useState<Msg[]>([{role:"assistant",text:"Hi! I'm BizMind AI — your pipeline copilot. Ask me anything about your deals, forecasts, agents, or just say hello! 👋"}]);
+  const [input,setInput]     = useState("");
+  const [loading,setLoading] = useState(false);
+  const scrollRef            = useRef<HTMLDivElement>(null);
+  const inputRef             = useRef<HTMLInputElement>(null);
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      text: "Hi, I'm BizMind AI Assistant! I can answer any questions about your pipeline or general topics. How can I help you today?",
-      timestamp: getTimestamp()
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  useEffect(()=>{ if(scrollRef.current) scrollRef.current.scrollTop=scrollRef.current.scrollHeight; },[msgs,loading]);
+  useEffect(()=>{ if(open&&inputRef.current) inputRef.current.focus(); },[open]);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, isLoading, isOpen]);
-
-  useEffect(() => {
-    if (isOpen && !isLoading && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 10);
-    }
-  }, [isOpen, isLoading]);
-
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
-
-  const clearChat = () => {
-    setMessages([{
-      role: "assistant",
-      text: "Hi, I'm BizMind AI Assistant! I can answer any questions about your pipeline or general topics. How can I help you today?",
-      timestamp: getTimestamp()
-    }]);
-  };
-
-  const callGemini = useCallback(async (history: Message[], userMessage: string): Promise<string> => {
-    const apiKey = getApiKey();
-    if (!apiKey || apiKey === 'your_key_here') {
-      throw new Error("No API key");
-    }
-
-    const contextBlock = buildContextBlock();
-    const contents = [
-      ...history.slice(1).map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.text }],
-      })),
-      { role: "user", parts: [{ text: userMessage }] },
-    ];
-
-    const body = {
-      system_instruction: {
-        parts: [{ text: `${SYSTEM_PROMPT}\n\n[INJECT FULL PIPELINE CONTEXT HERE]\n${contextBlock}` }],
-      },
-      contents,
-      generationConfig: {
-        temperature: 0.6,
-        maxOutputTokens: 1024,
-      },
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const res = await fetch(GEMINI_ENDPOINT(apiKey), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        throw new Error("API response error");
-      }
-
-      const data = await res.json();
-      const reply = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? null;
-
-      if (!reply) throw new Error("Empty response");
-      return reply.trim();
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      console.error("Gemini API failed:", err?.message || err);
-      throw err;
-    }
-  }, []);
-
-  const smartLocalFallback = useCallback((text: string): string => {
-    const q = text.toLowerCase().trim().replace(/[^\w\s]/g, ' ');
-    // 1. Strict Greeting Regex (Must be pure greeting, nothing else)
-    const isGreeting = /^(h+e+l+o+|h+i+|h+e+y+|hiya|howdy|greetings|yo|sup|good\s+(morning|afternoon|evening|day)|what'?s\s*up|namaste|helo+|hai)[\s!?.,]*$/i.test(q);
-    if (isGreeting) {
-      return `Hello${userName ? ' ' + userName : ''}! How can I help you today?`;
-    }
-
-    // 2. Personal Introduction
-    const user = extractName(q);
-    if (user) {
-      setUserName(user);
-      return `Nice to meet you, ${user}! I'm BizMind AI Assistant. How can I help you with your pipeline today?`;
-    }
-
-    // 3. Who are you / what are you
-    if (/^(who|what)\s+are\s+you|are\s+you\s+an\s+ai/i.test(q)) {
-      return "I am BizMind AI Assistant, a powerful AI copilot embedded in your enterprise sales pipeline platform. I can help you analyze deals, generate forecasts, and monitor your team's performance! 🚀";
-    }
-
-    // 4. What is this app / what is BizMind
-    if (/what\s+is\s+(this|bizmind)|about\s+(this\s+app|bizmind)/i.test(q)) {
-      return "BizMind AI is an enterprise autonomous revenue operations platform. It helps you manage your pipeline, track deals, generate reports, and automate tasks using AI agents.";
-    }
-
-    // 5. How are you / small talk
-    if (/how\s+(are\s+you|are\s+things|are\s+we)|howre|you\s+ok/i.test(q)) {
-      return "Doing great, thanks! Ready to help with your pipeline. What would you like to know?";
-    }
-
-    // 6. Thank you / bye / compliments / frustration
-    if (/thank|thx|appreciate/i.test(q)) {
-      return "You're welcome! Let me know if you need anything else.";
-    }
-    if (/bye|goodbye|see ya|cya/i.test(q)) {
-      return "Goodbye! Good luck with your pipeline! 👋";
-    }
-    if (/you\s+are\s+(good|nice|helpful|great|awesome)/i.test(q)) {
-      return "Thank you! I'm always here to help you close more deals! 📈";
-    }
-    if (/(not\s+working|useless|bad|suck)/i.test(q)) {
-      return "I'm really sorry about that. I want to be as helpful as possible — please tell me exactly what you're looking for and I'll do my best to assist you!";
-    }
-
-    // 7. At-risk deals
-    if (/\brisk\b|\bdanger\b|\bstall\b|\bstuck\b|\bproblem\b|\bbad\b|\bissue\b|\bconcern\b/i.test(q)) {
-      const totalAtRisk = AT_RISK_DEALS.reduce((s,d)=>s+d.value,0);
-      return `You have ${AT_RISK_DEALS.length} at-risk deals totalling $${(totalAtRisk/1000).toFixed(0)}K:\n\n${AT_RISK_DEALS.map(d=>`- **${d.name}** (${d.company}) — $${(d.value/1000).toFixed(0)}K, ${d.days} days\n  Recommendation: ${d.recommendation}`).join('\n\n')}\n\n→ Recommended Action: Escalate Acme Corp immediately. ⚠️`;
-    }
-
-    // 8. Stale deals
-    if (/\bstale\b|\bold\b|\binactive\b|\bmovement\b|\bactivity\b|\boverdue\b|\blong\b/i.test(q)) {
-      return `${STALE_DEALS.length} deals stale for 14+ days:\n\n${STALE_DEALS.map(d=>`- **${d.name}** (${d.company}) — ${d.days} days in ${d.stage}\n  Action: ${d.recommendation}`).join('\n\n')}\n\n→ Recommended Action: Re-engage stale deals or mark as closed/lost.`;
-    }
-
-    // 9. Rep performance
-    if (/\brep\b|\bperform\b|\bperson\b|\bwho\b|\bteam\b|\bsarah\b|\bmarcus\b|\bpriya\b|\bjames\b|\bbest\b|\btop\b|\bleader\b/i.test(q)) {
-      return `**Rep Performance:**\n\n1. Sarah Jenkins: $3,575K\n2. Marcus Reid: $3,480K\n3. Priya Patel: $1,180K\n\nTop performer: **Sarah Jenkins** 🥇\n\n→ Recommended Action: Reward Sarah for strong Q3 performance.`;
-    }
-
-    // 10. Forecast / Q3
-    if (/\bforecast\b|\bq3\b|\bquarter\b|\brevenue\b|\bpredict\b|\btarget\b|\bnumber\b/i.test(q)) {
-      return `**Q3 Forecast** 📈\n\n- Forecast Accuracy: 100%\n- Avg Velocity: 9 days\n- Total Pipeline: $${(TOTAL_PIPELINE/1000000).toFixed(1)}M\n- At-Risk: ${AT_RISK_DEALS.length} deals may slip\n\n→ Recommended Action: Address the ${AT_RISK_DEALS.length} at-risk deals to protect Q3 numbers.`;
-    }
-
-    // 11. Recommendations
-    if (/\brecommend\b|\bnext\b|\baction\b|\bshould\b|\bpriority\b|\burgent\b|\bdo\b|\bfocus\b/i.test(q)) {
-      return `**Top 3 Recommended Actions:** ✅\n\n1. Escalate **Acme Corp** to VP Sales — 18 days stalled\n2. Deploy battlecard for **Wayne Ent.** — competitor mentioned\n3. Re-engage **Cyberdyne** executive sponsor\n\n→ Recommended Action: Execute these three items today.`;
-    }
-
-    // 11.5 Agents (Bonus)
-    if (/\bagent\b/i.test(q)) {
-      return `BizMind AI has several active agents:\n- **PipelineAnalystAgent:** monitors health and velocity\n- **InsightGeneratorAgent:** creates business narratives\n- **AlertManagerAgent:** sends threshold alerts\n- **ReportBuilderAgent:** formats executive reports\n\n→ Recommended Action: Check the Agents tab to build a new agent.`;
-    }
-
-    // 12. Specific company lookup
-    const matchedDeal = PIPELINE_DEALS.find(d => {
-      const dealWords = d.name.toLowerCase().replace(/[^\w\s]/g, ' ').split(" ");
-      return q.includes(d.company.toLowerCase().replace(/[^\w\s]/g, ' ')) || 
-             (dealWords[0] && q.includes(dealWords[0]));
-    });
-    if (matchedDeal) {
-      return `**${matchedDeal.name}** (${matchedDeal.company})\n- Stage: ${matchedDeal.stage}\n- Value: $${(matchedDeal.value/1000).toFixed(0)}K\n- Days in stage: ${matchedDeal.days}\n- Health: ${matchedDeal.health}\n- Owner: ${matchedDeal.rep}\n\n→ Recommended Action: ${matchedDeal.recommendation}`;
-    }
-
-    // 13. Pipeline overview / general data (Strict pipeline check)
-    if (/\bpipeline\b|\ball deals\b|\bgive.*data\b|\bshow.*deals\b|\btell.*pipeline\b|\bfull.*pipeline\b|\bcomplete.*pipeline\b|\bgenerate summary\b/i.test(q)) {
-      const atRiskTotal = AT_RISK_DEALS.reduce((s,d)=>s+d.value,0);
-      return `**Pipeline Overview** 📊\n\n- Total Value: $${(TOTAL_PIPELINE/1000000).toFixed(1)}M across ${PIPELINE_DEALS.length} deals\n- At-Risk: ${AT_RISK_DEALS.length} deals ($${(atRiskTotal/1000).toFixed(0)}K)\n- Watch: ${WATCH_DEALS.length} deals\n- Healthy: ${HEALTHY_DEALS.length} deals\n- Stale: ${STALE_DEALS.length} deals\n\n→ Recommended Action: Review the ${AT_RISK_DEALS.length} at-risk deals to prevent churn.`;
-    }
-
-    return "I'm your BizMind AI assistant! I can answer questions about your pipeline, deals, agents, or general business topics. What would you like to know? 💡";
-  }, [userName]);
-
-  const sendMessage = async (textOverride?: string) => {
-    const text = (textOverride ?? input).trim();
-    if (!text || isLoading) return;
-
-    const newUserMessage: Message = { role: "user", text, timestamp: getTimestamp() };
-    const updatedHistory = [...messages, newUserMessage];
-
-    setMessages(updatedHistory);
+  const send = useCallback(async(override?:string)=>{
+    const text=(override??input).trim();
+    if(!text||loading) return;
+    const userMsg:Msg={role:"user",text};
+    const history=[...msgs,userMsg];
+    setMsgs(history);
     setInput("");
-    setIsLoading(true);
+    setLoading(true);
+    let reply="";
+    try { reply=await callGemini(msgs,text); }
+    catch { reply=localReply(text); }
+    setMsgs(p=>[...p,{role:"assistant",text:reply}]);
+    setLoading(false);
+  },[input,loading,msgs]);
 
-    let reply = "";
-    try {
-      reply = await callGemini(messages, text);
-    } catch (err) {
-      reply = smartLocalFallback(text);
-    }
-
-    setMessages((prev) => [...prev, { role: "assistant", text: reply, timestamp: getTimestamp() }]);
-    setIsLoading(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
+  const onKey=(e:React.KeyboardEvent)=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} };
 
   return (
     <div className="fixed bottom-6 right-6 z-50 font-sans">
-      {!isOpen && (
-        <button
-          onClick={() => setIsOpen(true)}
-          aria-label="Open BizMind AI chat"
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-900/40 transition-transform hover:scale-105 hover:bg-blue-500 active:scale-95"
-        >
-          <ChatIcon />
+      {!open&&(
+        <button onClick={()=>setOpen(true)} aria-label="Open chat"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:scale-105 hover:bg-blue-500 active:scale-95 transition-transform">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </button>
       )}
-
-      {isOpen && (
-        <div className="flex h-[600px] w-[380px] max-h-[80vh] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-[#0b1220] shadow-2xl shadow-black/50">
+      {open&&(
+        <div className="flex h-[600px] w-[370px] max-h-[80vh] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-[#0b1220] shadow-2xl">
           <div className="flex items-center justify-between border-b border-slate-700/60 bg-[#0d1526] px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400">
-                <BotIcon />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="2"/><circle cx="8.5" cy="14" r="1.5" fill="currentColor"/><circle cx="15.5" cy="14" r="1.5" fill="currentColor"/><path d="M12 8V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="3" r="1" fill="currentColor"/></svg>
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">BizMind AI Assistant</p>
+                <p className="text-sm font-semibold text-white">Ask BizMind AI</p>
                 <p className="flex items-center gap-1 text-[11px] text-emerald-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  Online
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block"/>Online
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={clearChat}
-                title="Clear chat"
-                className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700/40 hover:text-white"
-              >
-                <TrashIcon />
-              </button>
-              <button
-                onClick={() => setIsOpen(false)}
-                title="Close chat"
-                className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700/40 hover:text-white"
-              >
-                <CloseIcon />
-              </button>
-            </div>
+            <button onClick={()=>setOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-700/40 hover:text-white transition-colors">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            </button>
           </div>
-
-          <div
-            ref={scrollRef}
-            className="flex-1 space-y-4 overflow-y-auto px-4 py-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
-          >
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
-              >
-                <div
-                  className={`relative max-w-[85%] rounded-xl px-4 py-2.5 text-sm group ${
-                    msg.role === "user"
-                      ? "bg-blue-600 text-white rounded-tr-sm"
-                      : "bg-[#131d33] text-slate-200 rounded-tl-sm"
-                  }`}
-                >
-                  {msg.role === "assistant" ? (
-                    <div className="space-y-1">{formatAssistantText(msg.text)}</div>
-                  ) : (
-                    <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                  )}
-                  {msg.role === "assistant" && (
-                    <button 
-                      onClick={() => handleCopy(msg.text)}
-                      className="absolute top-2 right-2 text-slate-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-                      title="Copy to clipboard"
-                    >
-                      <CopyIcon />
-                    </button>
-                  )}
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+            {msgs.map((m,i)=>(
+              <div key={i} className={`flex ${m.role==="user"?"justify-end":"justify-start"}`}>
+                <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${m.role==="user"?"bg-blue-600 text-white":"bg-[#131d33] text-slate-200"}`}>
+                  {m.role==="assistant"
+                    ?<div className="space-y-1">{fmt(m.text)}</div>
+                    :<p className="leading-relaxed">{m.text}</p>
+                  }
                 </div>
-                <span className="mt-1 text-[10px] text-slate-500 px-1">{msg.timestamp}</span>
               </div>
             ))}
-
-            {isLoading && (
+            {loading&&(
               <div className="flex justify-start">
-                <div className="flex flex-col items-start">
-                  <div className="flex items-center gap-1.5 rounded-xl rounded-tl-sm bg-[#131d33] px-4 py-3">
-                    <TypingDot delay="0ms" />
-                    <TypingDot delay="150ms" />
-                    <TypingDot delay="300ms" />
-                  </div>
+                <div className="flex items-center gap-1 rounded-xl bg-[#131d33] px-4 py-3">
+                  {[0,150,300].map(d=><span key={d} className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{animationDelay:`${d}ms`}}/>)}
                 </div>
               </div>
             )}
           </div>
-
-          <div className="flex flex-col gap-2 border-t border-slate-700/60 bg-[#0b1220] px-4 py-3">
-            <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1 scrollbar-none">
-              {SUGGESTED_CHIPS_ROW1.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => sendMessage(q)}
-                  disabled={isLoading}
-                  className="whitespace-nowrap rounded-full border border-slate-700 bg-[#131d33] px-3 py-1.5 text-[11px] text-slate-300 transition-colors hover:border-blue-500 hover:text-white disabled:opacity-50"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1 scrollbar-none">
-              {SUGGESTED_CHIPS_ROW2.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => sendMessage(q)}
-                  disabled={isLoading}
-                  className="whitespace-nowrap rounded-full border border-slate-700 bg-[#131d33] px-3 py-1.5 text-[11px] text-slate-300 transition-colors hover:border-blue-500 hover:text-white disabled:opacity-50"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-2 border-t border-slate-700/60 px-4 py-3">
+            {CHIPS.map(q=>(
+              <button key={q} onClick={()=>send(q)} disabled={loading}
+                className="rounded-full border border-slate-700 bg-[#131d33] px-3 py-1.5 text-xs text-slate-300 hover:border-blue-500 hover:text-white disabled:opacity-50 transition-colors">
+                {q}
+              </button>
+            ))}
           </div>
-
-          <div className="flex items-center gap-2 border-t border-slate-700/60 px-3 py-3 bg-[#0d1526]">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your pipeline..."
-              disabled={isLoading}
-              className="flex-1 rounded-lg border border-slate-700 bg-[#0b1220] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-blue-500 disabled:opacity-60"
-            />
-            <button
-              onClick={() => sendMessage()}
-              disabled={isLoading || !input.trim()}
-              aria-label="Send message"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <SendIcon />
+          <div className="flex items-center gap-2 border-t border-slate-700/60 px-3 py-3">
+            <input ref={inputRef} type="text" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={onKey}
+              placeholder="Ask anything about your pipeline..." disabled={loading}
+              className="flex-1 rounded-lg border border-slate-700 bg-[#0d1526] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500 disabled:opacity-60 transition-colors"/>
+            <button onClick={()=>send()} disabled={loading||!input.trim()}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
           </div>
         </div>
       )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ICONS (inline SVG, no external icon library required)
-// ---------------------------------------------------------------------------
-
-function ChatIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function BotIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="3" y="8" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
-      <circle cx="8.5" cy="14" r="1.5" fill="currentColor" />
-      <circle cx="15.5" cy="14" r="1.5" fill="currentColor" />
-      <path d="M12 8V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="12" cy="3" r="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function TypingDot({ delay }: { delay: string }) {
-  return (
-    <span
-      className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"
-      style={{ animationDelay: delay }}
-    />
   );
 }
