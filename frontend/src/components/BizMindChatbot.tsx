@@ -115,8 +115,8 @@ function formatAssistantText(text: string): React.ReactNode[] {
   });
 }
 
-function smartLocalResponse(userMessage: string, ctx: DashboardContextType): string {
-  const q = userMessage.toLowerCase().trim();
+function smartLocalResponse(userMessage: string, ctx: DashboardContextType): string | null {
+  const q = userMessage.toLowerCase().trim().replace(/[^\w\s]/g, ' ');
   const PIPELINE_DEALS = ctx.pipeline;
   const AT_RISK_DEALS = PIPELINE_DEALS.filter(d => d.health === 'At-Risk');
   const WATCH_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Watch');
@@ -126,58 +126,58 @@ function smartLocalResponse(userMessage: string, ctx: DashboardContextType): str
   const parseValue = (valStr: string) => parseInt(valStr.replace(/[^0-9]/g, ''), 10) || 0;
 
   // Greetings
-  if (/^(h+i+|hey+|hello+|hiya|howdy|greetings|good\s+(morning|afternoon|evening)|what'?s\s*up|sup|yo|namaste|helo|hii+)[\s!?.,]*$/i.test(q)) {
+  if (/hello|hi|hey|howdy|greetings|yo|namaste|helo/i.test(q)) {
     return "Hello! How can I help you today?";
   }
 
   // Small talk
-  if (/how are you|how('?re| are) (you|things)|you ok/i.test(q)) {
+  if (/how are|howre|you ok/i.test(q)) {
     return "Doing great, thanks! Ready to help with your pipeline. What would you like to know?";
   }
 
   // What can you do
-  if (/what (can|do) you (do|help|know)|your (capabilities|features)|help( me)?$|how (do|can) (i|you)/i.test(q)) {
+  if (/what can|help me|capabilities|features/i.test(q)) {
     return "I can help you with:\n- Which deals are at risk\n- Full pipeline data and value\n- Q3 forecast and revenue projections\n- Rep performance breakdown\n- Stale and inactive deals\n- Specific company deal details\n- Executive pipeline summary\n- Next recommended actions\n\nJust ask naturally!";
   }
 
   // Pipeline data / show all / give me data
-  if (/pipeline|all deals?|give|show|tell|data|list|full|complete|overview|what('?s| is| are)|summary|summar/i.test(q)) {
+  if (/pipeline|data|overview|summary|all|full/i.test(q)) {
     const atRiskTotal = AT_RISK_DEALS.reduce((s,d)=>s+parseValue(d.value),0);
     return `**Pipeline Overview**\n\n- Total Value: ${ctx.totalPipelineValue} across ${PIPELINE_DEALS.length} deals\n- At-Risk: ${AT_RISK_DEALS.length} deals ($${(atRiskTotal/1000).toFixed(0)}K at risk)\n- Watch: ${WATCH_DEALS.length} deals need attention\n- Healthy: ${HEALTHY_DEALS.length} deals on track\n- Stale (14+ days): ${STALE_DEALS.length} deals\n\n**At-Risk Deals:**\n${AT_RISK_DEALS.map(d=>`- ${d.deal} (${d.company}): ${d.recommendation}`).join('\n')}\n\n**Watch Deals:**\n${WATCH_DEALS.map(d=>`- ${d.deal} (${d.company}): ${d.recommendation}`).join('\n')}`;
   }
 
   // At-risk
-  if (/at.?risk|risk|danger|stall|stuck|problem|issue|concern|worried|bad/i.test(q)) {
+  if (/risk|danger|stall|stuck|problem|bad|issue|concern/i.test(q)) {
     const totalAtRisk = AT_RISK_DEALS.reduce((s,d)=>s+parseValue(d.value),0);
     return `You have ${AT_RISK_DEALS.length} at-risk deals totalling $${(totalAtRisk/1000).toFixed(0)}K:\n\n${AT_RISK_DEALS.map(d=>`- **${d.deal}** (${d.company}) — ${d.stage}, ${d.value}, ${d.days} days\n  → ${d.recommendation}`).join('\n\n')}\n\nHighest priority: escalate Acme Corp to VP Sales immediately.`;
   }
 
   // Forecast / revenue / Q3
-  if (/forecast|q3|quarter|revenue|predict|projection|target|number/i.test(q)) {
+  if (/forecast|q3|quarter|revenue|predict|target|number/i.test(q)) {
     const committed = PIPELINE_DEALS.filter(d=>["Negotiation","Closed"].includes(d.stage));
     const committedTotal = committed.reduce((s,d)=>s+parseValue(d.value),0);
     return `**Q3 Forecast**\n\n- Forecast Accuracy: ${ctx.forecastAccuracy}\n- Committed Pipeline: $${(committedTotal/1000000).toFixed(1)}M\n- Total Pipeline: ${ctx.totalPipelineValue}\n- At-Risk: ${AT_RISK_DEALS.length} deals may slip\n\nRecommendation: Address the ${AT_RISK_DEALS.length} at-risk deals to protect Q3 numbers.`;
   }
 
   // Rep performance
-  if (/rep|perform|salesperson|person|who|team|sarah|marcus|priya|james|best|top|leader/i.test(q)) {
+  if (/rep|perform|person|who|team|sarah|marcus|priya|james|best|top|leader/i.test(q)) {
     return `**Rep Performance by Pipeline Value:**\n\n1. Sarah Jenkins: $1,200K\n2. Marcus Johnson: $950K\n3. Priya Patel: $820K\n\nTop performer: **Sarah Jenkins** at $1,200K`;
   }
 
   // Stale deals
-  if (/stale|old|inactive|movement|activity|update|reply|response|overdue|long|days/i.test(q)) {
+  if (/stale|old|inactive|movement|activity|overdue|long/i.test(q)) {
     return `${STALE_DEALS.length} deals stale for 14+ days:\n\n${STALE_DEALS.map(d=>`- **${d.deal}** (${d.company}) — ${d.days} days in ${d.stage}\n  → ${d.recommendation}`).join('\n\n')}`;
   }
 
   // Recommendations
-  if (/recommend|next|action|should|priority|urgent|important|do|focus/i.test(q)) {
+  if (/recommend|next|action|should|priority|urgent|do|focus/i.test(q)) {
     return `**Top 3 Recommended Actions:**\n\n1. Escalate **Acme Corp** (Q3 Enterprise Expansion) to VP Sales — 18 days stalled\n2. Re-engage **Cyberdyne** (Analytics Expansion) executive sponsor — at-risk\n3. Offer discount to **Wayne Ent.** (API Integration) — 21 days in Negotiation`;
   }
 
   // Specific company lookup
   const matchedDeal = PIPELINE_DEALS.find(d => {
-    const dealWords = d.deal.toLowerCase().split(" ");
-    return q.includes(d.company.toLowerCase()) || 
+    const dealWords = d.deal.toLowerCase().replace(/[^\w\s]/g, ' ').split(" ");
+    return q.includes(d.company.toLowerCase().replace(/[^\w\s]/g, ' ')) || 
            (dealWords[0] && q.includes(dealWords[0])) || 
            (dealWords[1] && q.includes(dealWords[1]));
   });
@@ -186,17 +186,17 @@ function smartLocalResponse(userMessage: string, ctx: DashboardContextType): str
   }
 
   // Watch deals
-  if (/watch|amber|caution|monitor|careful|attention/i.test(q)) {
+  if (/watch|amber|caution|monitor|careful/i.test(q)) {
     return `${WATCH_DEALS.length} deals need watching:\n\n${WATCH_DEALS.map(d=>`- **${d.deal}** (${d.company}): ${d.recommendation}`).join('\n')}`;
   }
 
   // Healthy deals
-  if (/health(y)?|good|green|fine|ok|well|strong/i.test(q)) {
+  if (/health|good|green|fine|ok|strong/i.test(q)) {
     return `${HEALTHY_DEALS.length} healthy deals on track:\n\n${HEALTHY_DEALS.map(d=>`- **${d.deal}** (${d.company}) — ${d.stage}, ${d.value}`).join('\n')}`;
   }
 
-  // Default - still helpful
-  return `I can help with your pipeline! Try asking:\n- "Which deals are at risk?"\n- "Show me the full pipeline"\n- "Forecast Q3"\n- "Top rep performance"\n- "Tell me about Acme Corp"\n- "What deals are stale?"\n- "What should I do next?"`;
+  // No match
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -334,41 +334,45 @@ export default function BizMindChatbot() {
       setIsLoading(true);
 
       try {
-        const reply = await callGemini(messages, text);
-        setIsLoading(false);
-        setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
-      } catch (err) {
-        const localReply = smartLocalResponse(text, dashboardContext);
+        let finalReply = smartLocalResponse(text, dashboardContext);
         
-        // Determine delay based on response type
-        const isSimple = localReply.startsWith("Hello!") || localReply.startsWith("Nice to meet you") || localReply.startsWith("I can help with");
-        const delayTime = isSimple ? 2000 : 2000 + Math.floor(Math.random() * 1000);
-        
-        // Think for calculated duration
-        await new Promise(r => setTimeout(r, delayTime));
-        
-        setIsLoading(false);
-        setIsStreaming(true);
-        
-        setMessages((prev) => [...prev, { role: "assistant", text: "" }]);
-        
-        // Reply slowly (simulate streaming)
-        for (let i = 1; i <= localReply.length; i += 2) {
-          await new Promise(r => setTimeout(r, 15));
+        if (finalReply) {
+          // If we have a local match, simulate streaming
+          const isSimple = finalReply.startsWith("Hello!") || finalReply.startsWith("Nice to meet you") || finalReply.startsWith("I can help with");
+          const delayTime = isSimple ? 2000 : 2000 + Math.floor(Math.random() * 1000);
+          
+          await new Promise(r => setTimeout(r, delayTime));
+          setIsLoading(false);
+          setIsStreaming(true);
+          
+          setMessages((prev) => [...prev, { role: "assistant", text: "" }]);
+          
+          for (let i = 1; i <= finalReply.length; i += 2) {
+            await new Promise(r => setTimeout(r, 15));
+            setMessages((prev) => {
+              const newList = [...prev];
+              newList[newList.length - 1] = { ...newList[newList.length - 1], text: finalReply!.slice(0, i) };
+              return newList;
+            });
+          }
+          
           setMessages((prev) => {
             const newList = [...prev];
-            newList[newList.length - 1] = { ...newList[newList.length - 1], text: localReply.slice(0, i) };
+            newList[newList.length - 1] = { ...newList[newList.length - 1], text: finalReply! };
             return newList;
           });
+          
+          setIsStreaming(false);
+        } else {
+          // If local match fails, ask Gemini (unusual queries)
+          const reply = await callGemini(messages, text);
+          setIsLoading(false);
+          setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
         }
-        
-        setMessages((prev) => {
-          const newList = [...prev];
-          newList[newList.length - 1] = { ...newList[newList.length - 1], text: localReply };
-          return newList;
-        });
-        
-        setIsStreaming(false);
+      } catch (err) {
+        // If Gemini also fails (no API key, network error), use generic fallback
+        setIsLoading(false);
+        setMessages((prev) => [...prev, { role: "assistant", text: "I didn't quite understand that. Try asking about: deals at risk, pipeline value, Q3 forecast, rep performance, or a specific company name like 'Acme Corp'." }]);
       }
     },
     [input, isLoading, isStreaming, messages, callGemini, dashboardContext]
