@@ -30,18 +30,40 @@ const SUGGESTED_QUESTIONS = [
   "Generate summary",
 ];
 
-const SYSTEM_PROMPT = `You are "BizMind AI", a smart and friendly enterprise assistant built into a sales pipeline dashboard. You can answer ANY question the user asks — whether it's about the pipeline data, general business knowledge, greetings, or anything else.
+const SYSTEM_PROMPT = `You are "BizMind AI", a friendly assistant built into an enterprise sales pipeline dashboard. You have two modes:
 
-RULES:
-- If the user greets you (hi, hello, hey, i'm [name]) — respond naturally and warmly. If they give their name, use it.
-- If the user asks who you are — explain you are BizMind AI, an autonomous revenue operations assistant.
-- If the user asks about pipeline, deals, risk, forecasts, reps — use the pipeline data provided to give specific, accurate answers.
-- If the user asks general questions unrelated to pipeline — answer them helpfully like a knowledgeable assistant.
-- NEVER say "I don't know" or "I can't help with that". Always give a useful response.
-- NEVER mention API keys, mock mode, or technical implementation details.
-- Keep answers concise and clear. Use bullet points for lists.
-- If the user's English is broken or unclear, understand the intent and answer accordingly.
-- Always end business-related answers with a clear recommended action.`;
+MODE 1 — DAILY CONVERSATION:
+For casual messages, respond naturally and briefly like a helpful colleague:
+- Greetings (hi, hello, hey, hii, good morning etc.) → greet back warmly
+- "how are you" → short friendly response
+- "i'm [name]" or "my name is [name]" → "Nice to meet you, [name]!"
+- "who are you" → explain you are BizMind AI, an AI-powered pipeline copilot
+- "what is this" or "what is BizMind" → explain the app briefly
+- "thank you" / "thanks" → "You're welcome!"
+- "bye" / "goodbye" → "Goodbye! Good luck with your pipeline!"
+- General small talk → respond briefly and naturally
+
+MODE 2 — PIPELINE & BUSINESS QUESTIONS:
+For anything related to the dashboard, answer using ONLY the pipeline data provided:
+- Deal risk, at-risk deals, stale deals
+- Pipeline value, total deals, deal breakdown
+- Forecasts, Q3 numbers, revenue projections  
+- Rep performance, who is performing best
+- Specific company or deal questions (Acme Corp, Wayne Ent, Cyberdyne etc.)
+- Recommendations and next actions
+- Agent status (PipelineAnalystAgent, InsightGeneratorAgent etc.)
+- Reports, alerts, dashboard features
+
+STRICT RULES:
+- ONLY answer questions about the pipeline data OR casual daily conversation listed above
+- If someone asks something completely unrelated to the website or daily conversation (e.g. "what is the capital of France", "solve this math", "write me a poem") respond with: "I'm focused on your sales pipeline! I can help with deal risk, forecasts, rep performance, and pipeline insights. What would you like to know?"
+- NEVER mention API keys, mock mode, Gemini, or any technical details
+- NEVER say you are a Google or Anthropic AI model
+- Keep all answers short, clear, and actionable
+- Use bullet points when listing multiple items
+- For business answers, always end with one clear recommended next action
+- Handle broken or poor English — understand the intent and answer accordingly
+- If the user's question is unclear but seems pipeline-related, give the most relevant pipeline answer`;
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -66,29 +88,52 @@ interface DashboardContextType {
 }
 
 function buildContextBlock(ctx: DashboardContextType): string {
-  const PIPELINE_DEALS = ctx.pipeline;
+  const parseValue = (valStr: string) => parseInt(valStr.replace(/[^0-9]/g, ''), 10) || 0;
+  
+  const PIPELINE_DEALS = ctx.pipeline.map((d, i) => {
+    const reps = ["Marcus Reid", "Sarah Jenkins", "Priya Patel"];
+    return {
+      name: d.deal,
+      company: d.company,
+      stage: d.stage,
+      value: parseValue(d.value),
+      days: d.days,
+      health: d.health,
+      recommendation: d.recommendation,
+      rep: reps[i % reps.length]
+    };
+  });
+  
   const AT_RISK_DEALS = PIPELINE_DEALS.filter(d => d.health === 'At-Risk');
   const WATCH_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Watch');
   const HEALTHY_DEALS = PIPELINE_DEALS.filter(d => d.health === 'Healthy');
   const STALE_DEALS = PIPELINE_DEALS.filter(d => d.days >= 14);
+  const TOTAL_PIPELINE = PIPELINE_DEALS.reduce((s, d) => s + d.value, 0);
 
   return `
-DASHBOARD CONTEXT:
-- App Name: BizMind AI
-- Total Pipeline Value: ${ctx.totalPipelineValue}
-- Total Deals: ${PIPELINE_DEALS.length}
-- At-Risk Deals: ${AT_RISK_DEALS.length} (${AT_RISK_DEALS.map(d=>d.deal).join(', ')})
-- Watch Deals: ${WATCH_DEALS.length} (${WATCH_DEALS.map(d=>d.deal).join(', ')})
+ABOUT THIS APP:
+- Name: BizMind AI
+- Purpose: Enterprise autonomous revenue operations platform
+- AI Agents: PipelineAnalystAgent (pipeline health), InsightGeneratorAgent (business insights), AlertManagerAgent (threshold monitoring), ReportBuilderAgent (report generation)
+- Features: Live pipeline dashboard, active alerts with human-in-the-loop approval, executive reports, agent builder, real-time deal monitoring
+
+CURRENT PIPELINE DATA:
+- Total Pipeline Value: $${(TOTAL_PIPELINE/1000000).toFixed(1)}M
+- Total Active Deals: ${PIPELINE_DEALS.length}
+- At-Risk Deals: ${AT_RISK_DEALS.length} — ${AT_RISK_DEALS.map(d=>d.name+' ('+d.company+')').join(', ')}
+- Watch Deals: ${WATCH_DEALS.length} — ${WATCH_DEALS.map(d=>d.name+' ('+d.company+')').join(', ')}
 - Healthy Deals: ${HEALTHY_DEALS.length}
-- Stale Deals (14+ days): ${STALE_DEALS.length}
+- Stale Deals (14+ days no movement): ${STALE_DEALS.length}
 - Forecast Accuracy: ${ctx.forecastAccuracy}
 - Avg Deal Velocity: ${ctx.avgDealVelocity}
-- Top Rep: Marcus Reid ($1,200K pipeline)
 
-FULL DEAL LIST:
-${PIPELINE_DEALS.map(d=>`${d.deal} | ${d.company} | ${d.stage} | ${d.value} | ${d.days} days | ${d.health} | Rep: Marcus Reid | Action: ${d.recommendation}`).join('\n')}
+FULL DEAL TABLE:
+${PIPELINE_DEALS.map(d=>
+  d.name+' | '+d.company+' | Stage: '+d.stage+' | Value: $'+(d.value/1000).toFixed(0)+'K | Days: '+d.days+' | Health: '+d.health+' | Owner: '+d.rep+' | Action: '+d.recommendation
+).join('\n')}
 
-ACTIVE AGENTS: PipelineAnalystAgent, InsightGeneratorAgent, AlertManagerAgent, ReportBuilderAgent
+REP PERFORMANCE:
+${Object.entries(PIPELINE_DEALS.reduce((acc:any,d)=>{acc[d.rep]=(acc[d.rep]||0)+d.value;return acc},{})).sort((a:any,b:any)=>b[1]-a[1]).map(([rep,val]:any)=>rep+': $'+(val/1000).toFixed(0)+'K').join('\n')}
 `;
 }
 
