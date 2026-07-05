@@ -299,8 +299,10 @@ async function callGemini(history: {role:string;text:string}[], userMsg: string)
 }
 
 // TEXT FORMATTER
-function fmt(text: string) {
-  return text.split("\n").map((line,i)=>{
+function fmt(text: string, showCursor: boolean = false) {
+  const lines = text.split("\n");
+  return lines.map((line,i)=>{
+    const isLast = i === lines.length - 1;
     const t = line.trim();
     const isBullet = t.startsWith("- ") || t.startsWith("• ");
     const content = isBullet ? t.replace(/^[-•]\s*/,"") : line;
@@ -309,8 +311,12 @@ function fmt(text: string) {
         ? <strong key={j} className="font-semibold text-white">{p.slice(2,-2)}</strong>
         : <React.Fragment key={j}>{p}</React.Fragment>
     );
+    if (isLast && showCursor) {
+      parts.push(<span key="cursor" className="animate-pulse ml-1">▌</span>);
+    }
     if (isBullet) return <li key={i} className="ml-4 list-disc text-slate-200 leading-relaxed">{parts}</li>;
-    if (t==="") return <br key={i}/>;
+    if (t==="" && (!isLast || !showCursor)) return <br key={i}/>;
+    if (t==="" && isLast && showCursor) return <p key={i} className="text-slate-200 leading-relaxed"><span className="animate-pulse ml-1">▌</span></p>;
     return <p key={i} className="text-slate-200 leading-relaxed">{parts}</p>;
   });
 }
@@ -344,11 +350,48 @@ export default function BizMindChatbot() {
   const [input,setInput]     = useState("");
   const [loading,setLoading] = useState(false);
   const [idleCount,setIdleCount] = useState(0);
+  
+  // Typewriter state
+  const [displayedText, setDisplayedText] = useState<Record<number, string>>({});
+  const [isTyping, setIsTyping] = useState<boolean>(false);
+  
   const scrollRef            = useRef<HTMLDivElement>(null);
   const inputRef             = useRef<HTMLInputElement>(null);
 
-  useEffect(()=>{ if(scrollRef.current) scrollRef.current.scrollTop=scrollRef.current.scrollHeight; },[msgs,loading]);
+  useEffect(()=>{ if(scrollRef.current) scrollRef.current.scrollTop=scrollRef.current.scrollHeight; },[msgs,loading,displayedText]);
   useEffect(()=>{ if(open&&inputRef.current) inputRef.current.focus(); },[open]);
+
+  const typeWriter = useCallback((text: string, msgIndex: number) => {
+    let i = 0;
+    const speed = 18; // milliseconds per character
+    setIsTyping(true);
+    
+    const timer = setInterval(() => {
+      if (i < text.length && i < 800) {
+        setDisplayedText(prev => ({
+          ...prev,
+          [msgIndex]: text.slice(0, i + 1)
+        }));
+        i++;
+      } else {
+        clearInterval(timer);
+        setIsTyping(false);
+        // Cap at 800 and show instantly
+        if (i >= 800 && text.length > 800) {
+          setDisplayedText(prev => ({
+            ...prev,
+            [msgIndex]: text
+          }));
+        }
+        // Auto-focus input after typewriter finishes
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, 100);
+      }
+    }, speed);
+  }, []);
 
   const send = useCallback(async(override?:string)=>{
     const text=(override??input).trim();
@@ -366,7 +409,12 @@ export default function BizMindChatbot() {
     const userMsg:Msg={role:"user",text};
     const history=[...msgs,userMsg];
     setMsgs(history);
+    
     setInput("");
+    setTimeout(() => {
+      if (inputRef.current) inputRef.current.focus();
+    }, 50);
+    
     setLoading(true);
 
     // Add 3-4s thinking delay before calling any logic
@@ -386,9 +434,11 @@ export default function BizMindChatbot() {
     }
 
     const responseChips = getChipsForInput(text);
+    const newIndex = history.length;
+    typeWriter(reply, newIndex);
     setMsgs(p=>[...p,{role:"assistant",text:reply,chips:responseChips}]);
     setLoading(false);
-  },[input,loading,msgs,idleCount]);
+  },[input,loading,msgs,idleCount,typeWriter]);
 
   const onKey=(e:React.KeyboardEvent)=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} };
 
@@ -423,11 +473,13 @@ export default function BizMindChatbot() {
               <div key={i} className={`flex ${m.role==="user"?"justify-end":"justify-start"}`}>
                 <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${m.role==="user"?"bg-blue-600 text-white":"bg-[#131d33] text-slate-200"}`}>
                   {m.role==="assistant"
-                    ?<div className="space-y-1">{fmt(m.text)}</div>
+                    ?<div className="space-y-1">
+                        {fmt(displayedText[i] !== undefined ? displayedText[i] : m.text, isTyping && i === msgs.length - 1)}
+                     </div>
                     :<p className="leading-relaxed">{m.text}</p>
                   }
                   
-                  {m.role==="assistant" && i === msgs.length - 1 && !loading && m.chips && (
+                  {m.role==="assistant" && i === msgs.length - 1 && !loading && !isTyping && m.chips && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {m.chips.map(chip => (
                         <button key={chip} onClick={() => send(chip)}
