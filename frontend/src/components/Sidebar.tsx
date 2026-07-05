@@ -1,18 +1,17 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, FileText, Bell, Users, Bot, Wrench } from 'lucide-react';
 import clsx from 'clsx';
 import { useAppContext } from '../contexts/AppContext';
 
 export const Sidebar: React.FC = () => {
   const { dataSource } = useAppContext();
-  const location = useLocation();
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Reports', path: '/reports', icon: FileText },
     { name: 'Alerts', path: '/alerts', icon: Bell },
     { name: 'Agents', path: '/agents', icon: Users },
-    { name: 'Builder', path: '/builder', icon: Wrench, activePaths: ['/', '/builder'] },
+    { name: 'Builder', path: '/builder', icon: Wrench },
   ];
 
   return (
@@ -27,15 +26,14 @@ export const Sidebar: React.FC = () => {
           <NavLink
             key={item.name}
             to={item.path}
-            className={({ isActive }) => {
-              const isMatch = isActive || (item.activePaths ? item.activePaths.includes(location.pathname) : false);
-              return clsx(
+            className={({ isActive }) =>
+              clsx(
                 'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-200 text-sm font-medium',
-                isMatch
+                isActive
                   ? 'bg-accent/10 text-accent'
                   : 'text-slate-400 hover:bg-[#112240] hover:text-white'
-              );
-            }}
+              )
+            }
           >
             <item.icon className="w-5 h-5" />
             {item.name}

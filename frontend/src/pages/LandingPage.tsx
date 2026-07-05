@@ -26,7 +26,7 @@ export const LandingPage: React.FC = () => {
         </h1>
         
         <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-12">
-          BizMind AI monitors your pipeline 24/7, flags at-risk deals, and delivers executive-ready insights — powered by Google ADK 2.0 multi-agent AI.
+          BizMind AI monitors your pipeline 24/7, flags at-risk deals, and delivers executive-ready insights — powered by Gemini 2.0 Flash multi-agent AI.
         </p>
         
         <Link 

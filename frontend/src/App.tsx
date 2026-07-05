@@ -1,6 +1,7 @@
-import { HashRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Layout } from './components/Layout';
+import { LandingPage } from './pages/LandingPage';
 import { Dashboard } from './pages/Dashboard';
 import { ReportsPage } from './pages/ReportsPage';
 import { AlertsPage } from './pages/AlertsPage';
@@ -9,13 +10,25 @@ import { AgentBuilderPage } from './pages/AgentBuilderPage';
 import BizMindChatbot from './components/BizMindChatbot';
 import { AppProvider } from './contexts/AppContext';
 
-function ScrollToHome() {
+function RefreshRedirect() {
   const navigate = useNavigate();
+  const location = useLocation();
   
   useEffect(() => {
-    // On first load/refresh, always go to home
-    navigate('/');
-  }, []); // empty dependency = runs only on mount/refresh
+    // Store current path in sessionStorage
+    sessionStorage.setItem('lastPage', location.pathname);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    // On fresh load (not navigation), go to home
+    const entries = window.performance.getEntriesByType('navigation');
+    if (entries.length > 0) {
+      const navigationType = entries[0] as PerformanceNavigationTiming;
+      if (navigationType.type === 'reload') {
+        navigate('/');
+      }
+    }
+  }, [navigate]);
   
   return null;
 }
@@ -24,10 +37,10 @@ function App() {
   return (
     <AppProvider>
       <Router>
-        <ScrollToHome />
+        <RefreshRedirect />
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route element={<Layout />}>
-            <Route path="/" element={<AgentBuilderPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
