@@ -20,6 +20,7 @@ export const ReportsPage: React.FC = () => {
   });
 
   React.useEffect(() => {
+    document.title = "BizMind AI — Reports";
     localStorage.setItem('bizmind-reports', JSON.stringify(reportList));
   }, [reportList]);
   const [isGenerating, setIsGenerating] = useState(false);

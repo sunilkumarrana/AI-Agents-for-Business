@@ -33,6 +33,7 @@ export const Dashboard: React.FC = () => {
   const initialLoadRef = useRef(false);
 
   useEffect(() => {
+    document.title = "BizMind AI — Dashboard";
     let mounted = true;
     if (deals.length > 0) {
       // Don't show global loader on every 5s background tick if we already have it

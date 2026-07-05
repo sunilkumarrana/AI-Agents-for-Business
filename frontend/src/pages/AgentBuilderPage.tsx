@@ -16,6 +16,10 @@ export const AgentBuilderPage: React.FC = () => {
   const { deployAgent } = useAppContext();
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    document.title = "BizMind AI — Build Your Agent";
+  }, []);
+
   const [wireStatus, setWireStatus] = useState<'pending' | 'processing' | 'approved' | 'rejected'>('pending');
 
   const handleWireAction = (action: 'approved' | 'rejected') => {

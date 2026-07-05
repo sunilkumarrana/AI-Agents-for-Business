@@ -18,6 +18,7 @@ export const AlertsPage: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = "BizMind AI — Active Alerts";
     localStorage.setItem('bizmind-handled-alerts', JSON.stringify(handledDealIds));
   }, [handledDealIds]);
 

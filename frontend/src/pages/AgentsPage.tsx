@@ -19,6 +19,7 @@ export const AgentsPage: React.FC = () => {
   const [memoryUsage, setMemoryUsage] = useState(2.4);
 
   useEffect(() => {
+    document.title = "BizMind AI — Agent Swarm";
     const timer = setInterval(() => {
       setLocalAgents(prev => prev.map(a => ({
         ...a,
