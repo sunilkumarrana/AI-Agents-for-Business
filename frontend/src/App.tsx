@@ -23,12 +23,12 @@ function RefreshRedirect() {
     // On fresh load (not navigation), go to home
     const entries = window.performance.getEntriesByType('navigation');
     if (entries.length > 0) {
-      const navigationType = entries[0] as PerformanceNavigationTiming;
-      if (navigationType.type === 'reload') {
+      const navEntry = entries[0] as PerformanceNavigationTiming;
+      if (navEntry.type === 'reload' && location.pathname !== '/') {
         navigate('/');
       }
     }
-  }, [navigate]);
+  }, []);
   
   return null;
 }

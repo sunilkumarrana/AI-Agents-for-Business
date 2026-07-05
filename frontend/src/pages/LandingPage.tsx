@@ -1,8 +1,9 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Activity, ShieldAlert, FileBarChart, ArrowRight, Bot } from 'lucide-react';
 
 export const LandingPage: React.FC = () => {
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-primary flex flex-col items-center justify-center relative overflow-hidden">
       {/* Background decoration */}
@@ -29,13 +30,13 @@ export const LandingPage: React.FC = () => {
           BizMind AI monitors your pipeline 24/7, flags at-risk deals, and delivers executive-ready insights — powered by Gemini 2.0 Flash multi-agent AI.
         </p>
         
-        <Link 
-          to="/dashboard"
+        <button 
+          onClick={() => navigate('/dashboard')}
           className="inline-flex items-center gap-2 bg-accent hover:bg-blue-500 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:scale-105"
         >
           Launch Dashboard
           <ArrowRight className="w-5 h-5" />
-        </Link>
+        </button>
       </div>
 
       <div className="z-10 max-w-6xl mx-auto px-4 py-16 grid grid-cols-1 md:grid-cols-3 gap-8">
