@@ -35,114 +35,221 @@ const STALE    = DEALS.filter(d=>d.days>14);
 const K = (n:number) => `$${(n/1000).toFixed(0)}K`;
 const M = (n:number) => `$${(n/1000000).toFixed(1)}M`;
 
-// LOCAL RESPONSE ENGINE
-function localReply(input: string): string {
-  // normalize: lowercase, remove punctuation, trim
-  const q = input.toLowerCase().replace(/[^\w\s]/g," ").trim();
-  const words = q.split(/\s+/);
-  const has = (...terms: string[]) => terms.some(t => q.includes(t));
+// LOCAL RESPONSE ENGINE (KEYWORD MATCHING)
+function getResponse(input: string): string {
+  const q = input.toLowerCase();
+  const wordCount = q.trim().split(/\s+/).length;
 
-  // 1. PURE GREETING — only if message is 1-2 words and is a greeting word
-  const greetWords = ["hi","hii","hiii","hey","hello","helo","heya","hiya","yo","sup","howdy","namaste","greetings"];
-  if (words.length <= 3 && words.some(w => greetWords.includes(w))) {
-    return "Hello! How can I help you today? 👋";
+  if (q.includes("that's it") || q.includes("thats it") || 
+      q.includes("no thanks") || q.includes("nothing else") || 
+      q.includes("i'm done") || q.includes("im done") || 
+      q.includes("bye") || q.includes("goodbye") || 
+      q.includes("that's all") || q.includes("thats all")) {
+    return "Thank you so much for using BizMind AI! 🌟 It was a pleasure helping you today. Wishing you a great day and closed deals ahead! 🚀 Come back anytime you need pipeline insights.";
   }
 
-  // 2. PERSONAL INTRO
-  if (has("i am","i'm","my name","call me","myself")) {
-    const m = q.match(/(?:i am|i'm|my name is|call me|myself)\s+(\w+)/);
-    const name = m ? m[1].charAt(0).toUpperCase()+m[1].slice(1) : "there";
-    return `Nice to meet you, ${name}! 😊 I'm BizMind AI — your pipeline copilot. How can I help you today?`;
+  if (q.includes("cricket") || q.includes("football") || 
+      q.includes("movie") || q.includes("recipe") || 
+      q.includes("weather") || q.includes("news") || 
+      q.includes("sport") || q.includes("game") || 
+      q.includes("music") || q.includes("song") || 
+      q.includes("film") || q.includes("cook") || 
+      q.includes("travel") || q.includes("hotel") || 
+      q.includes("flight") || q.includes("politics") || 
+      q.includes("capital of") || q.includes("population of") || 
+      q.includes("history of") || q.includes("solve") || 
+      q.includes("calculate") || q.includes("math") || 
+      q.includes("equation") || q.includes("poem") || 
+      q.includes("story") || q.includes("joke")) {
+    return "That question is not related to BizMind AI 😊 I'm specifically built to help with your sales pipeline, deals, forecasts, agent activity, and revenue operations. Is there anything about your pipeline I can help you with?";
   }
 
-  // 3. WHO ARE YOU / WHAT ARE YOU
-  if (has("who are you","what are you","who r you","who is this","are you ai","are you bot","about you","your name","introduce")) {
-    return "I'm **BizMind AI** 🤖 — an autonomous revenue operations assistant built into this enterprise sales pipeline platform.\n\nI'm powered by a swarm of AI agents that monitor deals, flag risks, generate forecasts, and recommend actions in real time. I can also answer any question about your pipeline or this platform!\n\nWhat would you like to know?";
+  if (wordCount <= 3 && (
+      q.includes("hi") || q.includes("hey") || 
+      q.includes("hello") || q.includes("helo") || 
+      q.includes("hii") || q.includes("hiii") || 
+      q.includes("heya") || q.includes("hiya") || 
+      q.includes("howdy") || q.includes("namaste") || 
+      q.includes("good morning") || q.includes("good evening") || 
+      q.includes("good afternoon"))) {
+    return "Hello! 👋 Welcome to BizMind AI — your autonomous revenue intelligence assistant. I can help you with:\n\n📊 Pipeline overview and deal details\n⚠️ At-risk and stale deals\n📈 Q3 forecast and revenue projections\n👥 Rep performance breakdown\n🤖 Agent swarm activity\n💡 Recommended next actions\n\nWhat would you like to know?";
   }
 
-  // 4. WHAT IS THIS APP
-  if (has("what is this","what is bizmind","about this","about bizmind","what does this","what this app","explain this","what does bizmind","this platform","this website","this app","this tool","this dashboard")) {
-    return "**BizMind AI** is an enterprise revenue operations platform 🏢\n\nIt uses a swarm of specialized AI agents:\n- 🟢 **PipelineAnalystAgent** — monitors deal health\n- 💡 **InsightGeneratorAgent** — generates business insights\n- 🔔 **AlertManagerAgent** — monitors risk thresholds\n- 📊 **ReportBuilderAgent** — assembles executive reports\n\nKey features: Live pipeline dashboard, human-in-the-loop alerts, executive reports, and a custom agent builder.\n\nTotal pipeline value currently: **${M(TOTAL)}** across ${DEALS.length} active deals.";
+  if (q.includes("i'm ") || q.includes("im ") || 
+      q.includes("i am ") || q.includes("my name is") || 
+      q.includes("call me")) {
+    let name = "there";
+    const parts = q.split(/i'm |im |i am |my name is |call me /);
+    if (parts[1]) {
+      name = parts[1].trim().split(" ")[0];
+      name = name.charAt(0).toUpperCase() + name.slice(1);
+    }
+    return `Nice to meet you, ${name}! 😊 I'm BizMind AI — your pipeline copilot. I'm here to help you monitor deals, track risks, and stay on top of your revenue targets. What would you like to know about your pipeline today?`;
   }
 
-  // 5. HOW ARE YOU
-  if (has("how are you","how r you","how you doing","you ok","you good","hows it")) {
-    return "I'm doing great, thanks for asking! 😊 Ready to help with your pipeline. What would you like to know?";
+  if (q.includes("who are you") || q.includes("what are you") || 
+      q.includes("about you") || q.includes("who r you") || 
+      q.includes("introduce yourself") || q.includes("your name") || 
+      q.includes("are you ai") || q.includes("are you a bot")) {
+    return "I'm **BizMind AI** 🤖 — an autonomous revenue operations assistant built into this enterprise sales pipeline platform.\n\nI'm powered by a swarm of 4 specialized AI agents:\n🟢 PipelineAnalystAgent — monitors deal health\n💡 InsightGeneratorAgent — generates insights\n🔔 AlertManagerAgent — flags risks\n📊 ReportBuilderAgent — builds reports\n\nAsk me anything about your pipeline!";
   }
 
-  // 6. THANK YOU
-  if (has("thank","thanks","thx","ty ","tysm","appreciate")) {
-    return "You're welcome! 😊 Let me know if you need anything else.";
+  if (q.includes("what is this") || q.includes("what is bizmind") || 
+      q.includes("about bizmind") || q.includes("about this app") || 
+      q.includes("what does this") || q.includes("this platform") || 
+      q.includes("this website") || q.includes("this tool") || 
+      q.includes("explain bizmind") || q.includes("what this")) {
+    return "**BizMind AI** is an enterprise revenue intelligence platform 🏢\n\nIt uses 4 AI agents to monitor your sales pipeline 24/7, flag at-risk deals, generate executive reports, and recommend next actions — all with human approval before anything is executed.\n\n📊 Total pipeline: $8.2M across 10 active deals\n⚠️ Currently tracking 3 at-risk deals\n✅ Forecast accuracy: 100%";
   }
 
-  // 7. BYE
-  if (words.length <= 3 && has("bye","goodbye","see you","cya","take care","later","farewell")) {
-    return "Goodbye! Good luck with your pipeline! 👋 Come back anytime.";
+  if (q.includes("how are you") || q.includes("how r you") || 
+      q.includes("how are u") || q.includes("you ok") || 
+      q.includes("you good") || q.includes("how do you do")) {
+    return "I'm doing great, thank you for asking! 😊 Always ready to help with your pipeline. What would you like to know today?";
   }
 
-  // 8. AT-RISK DEALS
-  if (has("at risk","at-risk","risk","risky","danger","bad deal","problem deal","issue","concern","urgent","critical","which deal")) {
-    return `⚠️ You have **${AT_RISK.length} at-risk deals** totalling ${K(AT_RISK.reduce((s,d)=>s+d.value,0))}:\n\n${AT_RISK.map(d=>`🔴 **${d.name}** (${d.company})\n   Stage: ${d.stage} | Value: ${K(d.value)} | ${d.days} days\n   → ${d.rec}`).join("\n\n")}\n\n**Priority action:** Escalate Acme Corp to VP Sales immediately.`;
+  if (q.includes("thank you") || q.includes("thanks") || 
+      q.includes("thank u") || q.includes("thx") || 
+      q.includes("thnks") || q.includes("appreciate")) {
+    return "You're very welcome! 😊 Happy to help anytime. Is there anything else about your pipeline I can assist you with?";
   }
 
-  // 9. STALE DEALS
-  if (has("stale","inactive","no movement","no activity","no update","overdue","stuck","not moving","14 days","old deal")) {
-    return `📌 **${STALE.length} stale deals** (14+ days without movement):\n\n${STALE.map(d=>`- **${d.name}** (${d.company}) — ${d.days} days in ${d.stage}\n  → ${d.rec}`).join("\n\n")}`;
+  if (q.includes("all details") || q.includes("today pipeline") || 
+      q.includes("show details") || q.includes("full pipeline") || 
+      q.includes("complete pipeline") || q.includes("all data") || 
+      q.includes("show everything") || q.includes("full details") || 
+      q.includes("pipeline details") || q.includes("show pipeline") || 
+      q.includes("give details") || q.includes("tell me everything") || 
+      q.includes("all deals") || q.includes("show all")) {
+    return "📊 **Complete Pipeline Overview — Today**\n\n💰 Total Value: **$8.2M** across 10 deals\n⚠️ At-Risk: **3 deals**\n🟡 Watch: **2 deals**\n✅ Healthy: **5 deals**\n📌 Stale (14+ days): **3 deals**\n📈 Forecast Accuracy: **100%**\n⚡ Avg Deal Velocity: **9 days**\n\n**All 10 Deals:**\n🔴 Q3 Enterprise Expansion — Acme Corp | Negotiation | $850K | 18 days | AT-RISK\n🟢 Global Rollout Phase 1 — Globex Inc | Proposal | $1.2M | 4 days | Healthy\n🟡 Data Center Upgrade — Initech | Demo | $450K | 12 days | Watch\n🟢 Security Suite Renewal — Umbrella Corp | Qualification | $180K | 2 days | Healthy\n🟢 Cloud Migration — Stark Ind. | Closed | $2.1M | 1 day | Healthy\n🔴 API Integration — Wayne Ent. | Negotiation | $320K | 21 days | AT-RISK\n🟡 Platform Licensing — Massive Dynamic | Proposal | $950K | 9 days | Watch\n🟢 Managed Services — Soylent Corp | Demo | $275K | 5 days | Healthy\n🔴 Analytics Expansion — Cyberdyne | Qualification | $410K | 14 days | AT-RISK\n🟢 Infrastructure Overhaul — Tyrell Corp | Negotiation | $1.5M | 7 days | Healthy\n\n→ **Top Action:** Escalate Acme Corp to VP Sales immediately.";
   }
 
-  // 10. REP PERFORMANCE
-  if (has("rep performance","top rep","best rep","rep breakdown","salesperson","sales team","who is best","performing","sarah","marcus","priya","james","team performance")) {
-    const repMap: Record<string,number> = {};
-    DEALS.forEach(d=>{ repMap[d.rep]=(repMap[d.rep]||0)+d.value; });
-    const sorted = Object.entries(repMap).sort((a,b)=>b[1]-a[1]);
-    return `📊 **Rep Performance by Pipeline Value:**\n\n${sorted.map(([rep,val],i)=>`${i+1}. **${rep}**: ${K(val)}`).join("\n")}\n\n🏆 Top performer: **${sorted[0][0]}** at ${K(sorted[0][1])}`;
+  if (q.includes("at risk") || q.includes("at-risk") || 
+      q.includes("risk") || q.includes("risky") || 
+      q.includes("danger") || q.includes("bad deal") || 
+      q.includes("problem deal") || q.includes("which deal") || 
+      q.includes("critical") || q.includes("urgent")) {
+    return "⚠️ **3 At-Risk Deals** requiring immediate attention:\n\n🔴 **Q3 Enterprise Expansion** — Acme Corp\nNegotiation | $850K | 18 days stalled\n→ Escalate to VP Sales immediately\n\n🔴 **API Integration** — Wayne Ent.\nNegotiation | $320K | 21 days stalled\n→ Offer discount on term\n\n🔴 **Analytics Expansion** — Cyberdyne\nQualification | $410K | 14 days stalled\n→ Re-engage executive sponsor\n\n💰 Total at-risk value: **$1.58M**\n\n→ **Priority:** Start with Acme Corp — highest value and longest stall.";
   }
 
-  // 11. FORECAST / Q3 / REVENUE
-  if (has("forecast","q3","quarter","revenue","projection","predict","target","number","how much","financial")) {
-    const committed = DEALS.filter(d=>["Negotiation","Closed"].includes(d.stage));
-    return `📈 **Q3 Revenue Forecast:**\n\n- Forecast Accuracy: **100%**\n- Committed Pipeline: **${M(committed.reduce((s,d)=>s+d.value,0))}**\n- Total Pipeline: **${M(TOTAL)}**\n- At-Risk: **${AT_RISK.length} deals** may slip\n- Avg Deal Velocity: **9 days**\n\n→ **Action:** Address ${AT_RISK.length} at-risk deals to protect Q3 numbers.`;
+  if (q.includes("stale") || q.includes("inactive") || 
+      q.includes("no movement") || q.includes("no activity") || 
+      q.includes("not moving") || q.includes("stuck") || 
+      q.includes("old deal") || q.includes("overdue") || 
+      q.includes("no update") || q.includes("no reply")) {
+    return "📌 **3 Stale Deals** (14+ days without movement):\n\n1. **Q3 Enterprise Expansion** — Acme Corp | 18 days in Negotiation\n   → Escalate to VP Sales\n\n2. **API Integration** — Wayne Ent. | 21 days in Negotiation\n   → Offer discount on term\n\n3. **Analytics Expansion** — Cyberdyne | 14 days in Qualification\n   → Re-engage executive sponsor\n\n→ These 3 deals need outreach today.";
   }
 
-  // 12. RECOMMENDATIONS / NEXT ACTIONS
-  if (has("recommend","next step","what should","action","priority","what do i do","what to do","focus","urgent","important","suggest","advice","help me","what now")) {
-    return `💡 **Top 3 Recommended Actions Right Now:**\n\n1. 🔴 Escalate **Acme Corp** (Q3 Enterprise Expansion) to VP Sales — 18 days stalled in Negotiation\n2. 🔴 Re-engage **Cyberdyne** (Analytics Expansion) executive sponsor — at-risk for 14 days\n3. 🔴 Offer discount on term to **Wayne Ent.** (API Integration) — 21 days in Negotiation at-risk`;
+  if (q.includes("forecast") || q.includes("q3") || 
+      q.includes("quarter") || q.includes("revenue") || 
+      q.includes("projection") || q.includes("predict") || 
+      q.includes("target") || q.includes("number") || 
+      q.includes("financial")) {
+    return "📈 **Q3 Revenue Forecast:**\n\n✅ Forecast Accuracy: **100%**\n💰 Total Pipeline: **$8.2M**\n📊 Committed (Negotiation + Closed): **$4.67M**\n📉 Best Case (all deals close): **$8.2M**\n⚠️ At-Risk: 3 deals ($1.58M may slip)\n\n**6-Month Projection:**\nJan: $600K → Feb: $800K → Mar: $1.1M\nApr: $1.4M → May: $1.8M → Jun: $2.4M\n\n→ **Action:** Protect Q3 by addressing 3 at-risk deals this week.";
   }
 
-  // 13. SPECIFIC COMPANY LOOKUP
-  const found = DEALS.find(d=>
-    q.includes(d.company.toLowerCase()) ||
-    q.includes(d.name.toLowerCase().split(" ")[0]) ||
-    q.includes(d.name.toLowerCase().split(" ")[1]||"___")
-  );
-  if (found) {
-    const icon = found.health==="at-risk"?"🔴":found.health==="watch"?"🟡":"🟢";
-    return `${icon} **${found.name}** — ${found.company}\n\n- Stage: ${found.stage}\n- Value: ${K(found.value)}\n- Days in stage: ${found.days}\n- Health: **${found.health}**\n- Owner: ${found.rep}\n\n→ **Recommendation:** ${found.rec}`;
+  if (q.includes("rep") || q.includes("performance") || 
+      q.includes("salesperson") || q.includes("who is best") || 
+      q.includes("top performer") || q.includes("best rep") || 
+      q.includes("sarah") || q.includes("marcus") || 
+      q.includes("priya") || q.includes("james") || 
+      q.includes("team") || q.includes("who perform")) {
+    return "👥 **Rep Performance by Pipeline Value:**\n\n1. 🏆 **Marcus Reid**: $3.77M (3 deals)\n2. **Sarah Chen**: $1.305M (3 deals)\n3. **James Wu**: $2.51M (2 deals)\n4. **Priya Nair**: $1.4M (2 deals)\n\n🏆 Top performer: **Marcus Reid** — managing Infrastructure Overhaul ($1.5M), API Integration ($320K), and Global Rollout ($1.2M)\n\n→ James Wu has 2 at-risk deals — recommend a check-in call today.";
   }
 
-  // 14. WATCH DEALS
-  if (has("watch","amber","caution","monitor","careful","attention","warning")) {
-    return `🟡 **${WATCH.length} deals need watching:**\n\n${WATCH.map(d=>`- **${d.name}** (${d.company}): ${d.rec}`).join("\n")}`;
+  if (q.includes("recommend") || q.includes("next step") || 
+      q.includes("what should") || q.includes("action") || 
+      q.includes("priority") || q.includes("what to do") || 
+      q.includes("focus") || q.includes("suggest") || 
+      q.includes("advice") || q.includes("what now") || 
+      q.includes("help me") || q.includes("what do i")) {
+    return "💡 **Top 3 Recommended Actions Right Now:**\n\n1. 🔴 **Escalate Acme Corp** (Q3 Enterprise Expansion) to VP Sales\n   18 days stalled in Negotiation — highest priority\n\n2. 🔴 **Re-engage Cyberdyne** (Analytics Expansion) executive sponsor\n   14 days in Qualification with no movement\n\n3. 🔴 **Offer discount** to Wayne Ent. (API Integration)\n   21 days in Negotiation — longest stall in the pipeline\n\n→ Completing all 3 this week protects $1.58M in at-risk revenue.";
   }
 
-  // 15. HEALTHY DEALS
-  if (has("healthy","green","good deal","on track","fine","strong","healthy deal")) {
-    return `🟢 **${HEALTHY.length} healthy deals on track:**\n\n${HEALTHY.map(d=>`- **${d.name}** (${d.company}) — ${d.stage}, ${K(d.value)}`).join("\n")}`;
+  if (q.includes("summary") || q.includes("generate") || 
+      q.includes("report") || q.includes("overview") || 
+      q.includes("snapshot") || q.includes("brief") || 
+      q.includes("status update") || q.includes("update me")) {
+    return "📋 **Executive Pipeline Summary:**\n\n💰 Total Value: **$8.2M** | 10 Active Deals\n🔴 At-Risk: 3 deals ($1.58M)\n🟡 Watch: 2 deals ($1.4M)\n🟢 Healthy: 5 deals ($5.23M)\n📌 Stale: 3 deals (14+ days)\n📈 Forecast Accuracy: 100%\n\n**This Week's Priorities:**\n1. Escalate Acme Corp → VP Sales\n2. Re-engage Cyberdyne sponsor\n3. Offer discount to Wayne Ent.\n\n**Top Deal:** Cloud Migration — Stark Ind. CLOSED at $2.1M ✅\n\n→ Overall pipeline health is moderate. Immediate action on 3 at-risk deals needed.";
   }
 
-  // 16. AGENTS
-  if (has("agent","pipeline analyst","insight generator","alert manager","report builder","swarm","bot","ai agent")) {
-    return `🤖 **Active Agent Swarm:**\n\n1. **PipelineAnalystAgent** 🟢 Active\n   Tools: get_pipeline_summary(), flag_stale_deals(), calculate_forecast()\n\n2. **InsightGeneratorAgent** 💤 Idle\n   Tools: generate_executive_summary(), identify_trends(), suggest_actions()\n\n3. **AlertManagerAgent** 🟡 Standby\n   Tools: check_deal_health(), send_alert(), set_threshold()\n\n4. **ReportBuilderAgent** 💤 Idle\n   Tools: build_weekly_report(), export_to_pdf(), schedule_report()`;
+  if (q.includes("watch") || q.includes("caution") || 
+      q.includes("monitor") || q.includes("amber") || 
+      q.includes("careful") || q.includes("attention")) {
+    return "🟡 **2 Deals Need Watching:**\n\n1. **Data Center Upgrade** — Initech\n   Demo | $450K | 12 days\n   → Schedule technical review\n\n2. **Platform Licensing** — Massive Dynamic\n   Proposal | $950K | 9 days\n   → Review pricing with Deal Desk\n\n💰 Total watch value: **$1.4M**\n→ These deals are not yet at-risk but need attention this week.";
   }
 
-  // 17. GENERAL PIPELINE / DATA / OVERVIEW (broad catch-all — LAST)
-  if (has("pipeline","deal","data","show","give","tell","list","all","overview","full","complete","summary","summar","dashboard","what is","what are","how many")) {
-    const atRiskTotal = AT_RISK.reduce((s,d)=>s+d.value,0);
-    return `📊 **Pipeline Overview:**\n\n- Total Value: **${M(TOTAL)}** across ${DEALS.length} deals\n- 🔴 At-Risk: **${AT_RISK.length} deals** (${K(atRiskTotal)})\n- 🟡 Watch: **${WATCH.length} deals** need attention\n- 🟢 Healthy: **${HEALTHY.length} deals** on track\n- 📌 Stale: **${STALE.length} deals** (14+ days)\n- Forecast Accuracy: **100%**\n\n**At-Risk Deals:**\n${AT_RISK.map(d=>`🔴 ${d.name} (${d.company}): ${d.rec}`).join("\n")}\n\n**Watch Deals:**\n${WATCH.map(d=>`🟡 ${d.name} (${d.company}): ${d.rec}`).join("\n")}`;
+  if (q.includes("healthy") || q.includes("good deal") || 
+      q.includes("on track") || q.includes("green") || 
+      q.includes("doing well") || q.includes("strong deal")) {
+    return "🟢 **5 Healthy Deals on Track:**\n\n1. Global Rollout Phase 1 — Globex Inc | $1.2M\n2. Security Suite Renewal — Umbrella Corp | $180K\n3. Cloud Migration — Stark Ind. | $2.1M ✅ CLOSED\n4. Managed Services — Soylent Corp | $275K\n5. Infrastructure Overhaul — Tyrell Corp | $1.5M\n\n💰 Total healthy value: **$5.23M**\n→ Great progress! Focus energy on the 3 at-risk deals now.";
   }
 
-  // 18. FINAL FALLBACK
-  return `I'm your BizMind AI pipeline assistant! 🤖 I can help with:\n\n- 📊 "Which deals are at risk?"\n- 📈 "Forecast Q3"\n- 👥 "Top rep performance"\n- 📋 "Generate summary"\n- 🏢 "Tell me about Acme Corp"\n- 🤖 "Show all agents"\n- ⚡ "What should I do next?"\n\nWhat would you like to know?`;
+  if (q.includes("agent") || q.includes("swarm") || 
+      q.includes("pipeline analyst") || q.includes("insight generator") || 
+      q.includes("alert manager") || q.includes("report builder") || 
+      q.includes("how many agent") || q.includes("active agent")) {
+    return "🤖 **Agent Swarm Status:**\n\n1. 🟢 **PipelineAnalystAgent** — ACTIVE\n   Tools: get_pipeline_summary(), flag_stale_deals(), calculate_forecast()\n   Last action: 2 mins ago | Actions today: 145\n\n2. 💤 **InsightGeneratorAgent** — IDLE\n   Tools: generate_executive_summary(), identify_trends(), suggest_actions()\n   Last action: 10 mins ago | Actions today: 42\n\n3. 🟡 **AlertManagerAgent** — STANDBY\n   Tools: check_deal_health(), send_alert(), set_threshold()\n   Last action: 1 hour ago | Actions today: 18\n\n4. 💤 **ReportBuilderAgent** — IDLE\n   Tools: build_weekly_report(), export_to_pdf(), schedule_report()\n   Last action: 5 hours ago | Actions today: 3";
+  }
+
+  if (q.includes("acme") || q.includes("acme corp")) {
+    return "🔴 **Q3 Enterprise Expansion — Acme Corp**\n\nStage: Negotiation | Value: $850K | Days: 18\nHealth: AT-RISK | Owner: Sarah Chen\n\n→ **Recommendation:** Escalate to VP Sales immediately — this deal has been stalled for 18 days with no stakeholder reply.";
+  }
+  if (q.includes("globex") || q.includes("globex inc")) {
+    return "🟢 **Global Rollout Phase 1 — Globex Inc**\n\nStage: Proposal | Value: $1.2M | Days: 4\nHealth: Healthy | Owner: Marcus Reid\n\n→ **Recommendation:** Send follow-up deck — deal is progressing well.";
+  }
+  if (q.includes("initech")) {
+    return "🟡 **Data Center Upgrade — Initech**\n\nStage: Demo | Value: $450K | Days: 12\nHealth: Watch | Owner: Priya Nair\n\n→ **Recommendation:** Schedule technical review this week before it moves to at-risk.";
+  }
+  if (q.includes("umbrella") || q.includes("umbrella corp")) {
+    return "🟢 **Security Suite Renewal — Umbrella Corp**\n\nStage: Qualification | Value: $180K | Days: 2\nHealth: Healthy | Owner: Sarah Chen\n\n→ **Recommendation:** Verify champion — early stage, good momentum.";
+  }
+  if (q.includes("stark") || q.includes("stark ind")) {
+    return "🟢 **Cloud Migration — Stark Ind.**\n\nStage: CLOSED ✅ | Value: $2.1M | Days: 1\nHealth: Healthy | Owner: James Wu\n\n→ **Recommendation:** Initiate onboarding — congratulations, this deal is closed!";
+  }
+  if (q.includes("wayne") || q.includes("wayne ent")) {
+    return "🔴 **API Integration — Wayne Ent.**\n\nStage: Negotiation | Value: $320K | Days: 21\nHealth: AT-RISK | Owner: Marcus Reid\n\n→ **Recommendation:** Offer discount on term — longest stalled deal in the pipeline at 21 days.";
+  }
+  if (q.includes("massive dynamic") || q.includes("massive")) {
+    return "🟡 **Platform Licensing — Massive Dynamic**\n\nStage: Proposal | Value: $950K | Days: 9\nHealth: Watch | Owner: Priya Nair\n\n→ **Recommendation:** Review pricing with Deal Desk before responding to buyer.";
+  }
+  if (q.includes("soylent") || q.includes("soylent corp")) {
+    return "🟢 **Managed Services — Soylent Corp**\n\nStage: Demo | Value: $275K | Days: 5\nHealth: Healthy | Owner: Sarah Chen\n\n→ **Recommendation:** Prepare custom demo — good momentum, keep it moving.";
+  }
+  if (q.includes("cyberdyne")) {
+    return "🔴 **Analytics Expansion — Cyberdyne**\n\nStage: Qualification | Value: $410K | Days: 14\nHealth: AT-RISK | Owner: James Wu\n\n→ **Recommendation:** Re-engage executive sponsor immediately — deal has gone quiet.";
+  }
+  if (q.includes("tyrell") || q.includes("tyrell corp")) {
+    return "🟢 **Infrastructure Overhaul — Tyrell Corp**\n\nStage: Negotiation | Value: $1.5M | Days: 7\nHealth: Healthy | Owner: Marcus Reid\n\n→ **Recommendation:** Send contract draft — largest active deal, keep momentum going.";
+  }
+
+  if (q.includes("pipeline value") || q.includes("total value") || 
+      q.includes("how much") || q.includes("total pipeline") || 
+      q.includes("pipeline worth") || q.includes("pipeline size")) {
+    return "💰 **Total Pipeline Value: $8.2M**\n\nBreakdown by health:\n🔴 At-Risk: $1.58M (3 deals)\n🟡 Watch: $1.4M (2 deals)\n🟢 Healthy: $5.23M (5 deals)\n\nBreakdown by stage:\n✅ Closed: $2.1M\n🤝 Negotiation: $2.67M\n📋 Proposal: $2.15M\n🎯 Demo: $725K\n🔍 Qualification: $590K";
+  }
+
+  if (q.includes("alert") || q.includes("approval") || 
+      q.includes("approve") || q.includes("dismiss") || 
+      q.includes("hitl") || q.includes("human in the loop") || 
+      q.includes("pending") || q.includes("review")) {
+    return "🔔 **Active Alerts — Human Approval Required:**\n\n🔴 HIGH PRIORITY\nQ3 Enterprise Expansion (Acme Corp)\nIssue: 14+ days in Negotiation without stakeholder reply\nAgent Recommendation: Send escalation email sequence\n\n🟡 MEDIUM PRIORITY\nAPI Integration (Wayne Ent.)\nIssue: Competitor mentioned in recent call transcript\nAgent Recommendation: Deploy battlecard for competitor X\n\n🔵 LOW PRIORITY\nAnalytics Expansion (Cyberdyne)\nIssue: Missing technical validation step\nAgent Recommendation: Prompt SE to schedule review\n\n→ Go to the Alerts page to Approve & Send or Dismiss each action.";
+  }
+
+  if (q.includes("report") || q.includes("executive report") || 
+      q.includes("weekly report") || q.includes("generate report") || 
+      q.includes("pipeline report") || q.includes("audit")) {
+    return "📄 **Executive Reports Available:**\n\n1. 📊 Q3 Pipeline Risk Analysis (2026-06-25)\n   Generated by: ReportBuilderAgent + PipelineAnalystAgent\n\n2. 📈 Weekly Forecast Update (2026-06-18)\n   Generated by: ReportBuilderAgent\n\n3. 🔍 Stale Deals Audit (2026-06-11)\n   Generated by: ReportBuilderAgent + InsightGeneratorAgent\n\n→ Go to the Reports page to view, expand, or download any report. Click 'Generate New Report' for a fresh Gemini-powered analysis.";
+  }
+
+  if (q.includes("nothing") || q.includes("no query") || 
+      q.includes("no question") || q.includes("all good") || 
+      q.includes("i'm fine") || q.includes("im fine") || 
+      q.includes("not now") || q.includes("maybe later")) {
+    return "No problem at all! 😊 Whenever you need pipeline insights, deal updates, or revenue analysis — I'm right here. Have a productive day and good luck closing those deals! 🚀";
+  }
+
+  return "I'm not sure I understood that completely 😊 Could you rephrase it? I'm here to help with:\n\n📊 Pipeline data and deal details\n⚠️ At-risk and stale deals\n📈 Forecasts and revenue projections\n👥 Rep performance\n🤖 Agent activity\n💡 Recommended actions\n\nIs there anything about your pipeline I can help you with?";
 }
 
 // GEMINI API CALL
@@ -206,8 +313,8 @@ function fmt(text: string) {
 const CHIPS = [
   "Which deals are at risk?","Forecast Q3",
   "Top rep performance","Generate summary",
-  "What is BizMind AI?","Show all agents",
-  "Stale deals","Recommend actions"
+  "Show all details","Stale deals",
+  "Recommend actions","Show all agents"
 ];
 
 interface Msg { role:"user"|"assistant"; text:string; }
@@ -217,6 +324,7 @@ export default function BizMindChatbot() {
   const [msgs,setMsgs]       = useState<Msg[]>([{role:"assistant",text:"Hi! I'm BizMind AI — your pipeline copilot. Ask me anything about your deals, forecasts, agents, or just say hello! 👋"}]);
   const [input,setInput]     = useState("");
   const [loading,setLoading] = useState(false);
+  const [idleCount,setIdleCount] = useState(0);
   const scrollRef            = useRef<HTMLDivElement>(null);
   const inputRef             = useRef<HTMLInputElement>(null);
 
@@ -226,17 +334,36 @@ export default function BizMindChatbot() {
   const send = useCallback(async(override?:string)=>{
     const text=(override??input).trim();
     if(!text||loading) return;
+    
+    // Check inactivity rule
+    let currentIdle = idleCount;
+    if (!text.includes("?")) {
+      currentIdle += 1;
+    } else {
+      currentIdle = 0;
+    }
+    setIdleCount(currentIdle);
+
     const userMsg:Msg={role:"user",text};
     const history=[...msgs,userMsg];
     setMsgs(history);
     setInput("");
     setLoading(true);
     let reply="";
-    try { reply=await callGemini(msgs,text); }
-    catch { reply=localReply(text); }
+    try { 
+      reply=await callGemini(msgs,text); 
+    } catch { 
+      reply=getResponse(text); 
+    }
+    
+    if (currentIdle >= 2) {
+      reply += "\n\n💬 Is there anything else I can help you with?";
+      setIdleCount(0); // Reset after appending
+    }
+
     setMsgs(p=>[...p,{role:"assistant",text:reply}]);
     setLoading(false);
-  },[input,loading,msgs]);
+  },[input,loading,msgs,idleCount]);
 
   const onKey=(e:React.KeyboardEvent)=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} };
 
