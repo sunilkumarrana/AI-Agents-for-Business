@@ -72,7 +72,12 @@ function getResponse(input: string): string {
       q.includes("howdy") || q.includes("namaste") || 
       q.includes("good morning") || q.includes("good evening") || 
       q.includes("good afternoon"))) {
-    return "Hello! 👋 Welcome to BizMind AI — your autonomous revenue intelligence assistant. I can help you with:\n\n📊 Pipeline overview and deal details\n⚠️ At-risk and stale deals\n📈 Q3 forecast and revenue projections\n👥 Rep performance breakdown\n🤖 Agent swarm activity\n💡 Recommended next actions\n\nWhat would you like to know?";
+    return "Hello! 👋 How can I help you today?";
+  }
+  
+  if (q.includes("help") || q.includes("what can you do") || 
+      q.includes("capabilities") || q.includes("features")) {
+    return "Here is what I can help you with:\n\n📊 Pipeline overview and deal details\n⚠️ At-risk and stale deals\n📈 Q3 forecast and revenue projections\n👥 Rep performance breakdown\n🤖 Agent swarm activity\n💡 Recommended next actions\n\nWhat would you like to know?";
   }
 
   if (q.includes("i'm ") || q.includes("im ") || 
@@ -310,18 +315,32 @@ function fmt(text: string) {
   });
 }
 
-const CHIPS = [
-  "Which deals are at risk?","Forecast Q3",
-  "Top rep performance","Generate summary",
-  "Show all details","Stale deals",
-  "Recommend actions","Show all agents"
+const DEFAULT_CHIPS = [
+  "Which deals are at risk?",
+  "Show pipeline summary",
+  "Forecast Q3",
+  "Recommend actions"
 ];
 
-interface Msg { role:"user"|"assistant"; text:string; }
+function getChipsForInput(input: string): string[] {
+  const q = input.toLowerCase();
+  if (q.includes("risk")) return ["Tell me about Acme Corp", "Stale deals", "Recommend actions", "Show all agents"];
+  if (q.includes("pipeline") || q.includes("summary")) return ["At-risk deals", "Forecast Q3", "Rep performance", "Watch deals"];
+  if (q.includes("forecast") || q.includes("q3")) return ["At-risk deals", "Rep performance", "Recommend actions", "Show all details"];
+  if (q.includes("rep") || q.includes("performance")) return ["At-risk deals", "Forecast Q3", "Recommend actions", "Pipeline summary"];
+  if (q.includes("agent")) return ["Pipeline summary", "At-risk deals", "Generate report", "Forecast Q3"];
+  return DEFAULT_CHIPS;
+}
+
+interface Msg { role:"user"|"assistant"; text:string; chips?:string[] }
 
 export default function BizMindChatbot() {
   const [open,setOpen]       = useState(false);
-  const [msgs,setMsgs]       = useState<Msg[]>([{role:"assistant",text:"Hi! I'm BizMind AI — your pipeline copilot. Ask me anything about your deals, forecasts, agents, or just say hello! 👋"}]);
+  const [msgs,setMsgs]       = useState<Msg[]>([{
+    role:"assistant",
+    text:"Hi! I'm BizMind AI 👋 Ask me anything about your pipeline.",
+    chips: DEFAULT_CHIPS
+  }]);
   const [input,setInput]     = useState("");
   const [loading,setLoading] = useState(false);
   const [idleCount,setIdleCount] = useState(0);
@@ -349,6 +368,11 @@ export default function BizMindChatbot() {
     setMsgs(history);
     setInput("");
     setLoading(true);
+
+    // Add 3-4s thinking delay before calling any logic
+    const delay = 3000 + Math.random() * 1000;
+    await new Promise(resolve => setTimeout(resolve, delay));
+
     let reply="";
     try { 
       reply=await callGemini(msgs,text); 
@@ -361,7 +385,8 @@ export default function BizMindChatbot() {
       setIdleCount(0); // Reset after appending
     }
 
-    setMsgs(p=>[...p,{role:"assistant",text:reply}]);
+    const responseChips = getChipsForInput(text);
+    setMsgs(p=>[...p,{role:"assistant",text:reply,chips:responseChips}]);
     setLoading(false);
   },[input,loading,msgs,idleCount]);
 
@@ -401,6 +426,17 @@ export default function BizMindChatbot() {
                     ?<div className="space-y-1">{fmt(m.text)}</div>
                     :<p className="leading-relaxed">{m.text}</p>
                   }
+                  
+                  {m.role==="assistant" && i === msgs.length - 1 && !loading && m.chips && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {m.chips.map(chip => (
+                        <button key={chip} onClick={() => send(chip)}
+                          className="rounded-full border border-blue-600/40 bg-blue-600/10 px-3 py-1.5 text-xs text-blue-300 hover:border-blue-500 hover:bg-blue-600/20 hover:text-white transition-colors">
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -411,14 +447,6 @@ export default function BizMindChatbot() {
                 </div>
               </div>
             )}
-          </div>
-          <div className="flex flex-wrap gap-2 border-t border-slate-700/60 px-4 py-3">
-            {CHIPS.map(q=>(
-              <button key={q} onClick={()=>send(q)} disabled={loading}
-                className="rounded-full border border-slate-700 bg-[#131d33] px-3 py-1.5 text-xs text-slate-300 hover:border-blue-500 hover:text-white disabled:opacity-50 transition-colors">
-                {q}
-              </button>
-            ))}
           </div>
           <div className="flex items-center gap-2 border-t border-slate-700/60 px-3 py-3">
             <input ref={inputRef} type="text" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={onKey}
