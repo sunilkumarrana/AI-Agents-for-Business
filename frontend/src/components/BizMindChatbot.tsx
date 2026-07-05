@@ -36,7 +36,7 @@ const K = (n:number) => `$${(n/1000).toFixed(0)}K`;
 const M = (n:number) => `$${(n/1000000).toFixed(1)}M`;
 
 // LOCAL RESPONSE ENGINE (KEYWORD MATCHING)
-function getResponse(input: string): string {
+function getRawResponse(input: string): string {
   const q = input.toLowerCase();
   const wordCount = q.trim().split(/\s+/).length;
 
@@ -255,6 +255,18 @@ function getResponse(input: string): string {
   }
 
   return "I'm not sure I understood that completely 😊 Could you rephrase it? I'm here to help with:\n\n📊 Pipeline data and deal details\n⚠️ At-risk and stale deals\n📈 Forecasts and revenue projections\n👥 Rep performance\n🤖 Agent activity\n💡 Recommended actions\n\nIs there anything about your pipeline I can help you with?";
+}
+
+function getResponse(input: string): string {
+  const result = getRawResponse(input);
+  
+  if (result.includes("Thank you so much") || 
+      result.includes("Come back anytime") || 
+      result.includes("not related to BizMind")) {
+    return result;
+  }
+  
+  return result + "\n\n💬 Is there anything else I can help you with?";
 }
 
 // GEMINI API CALL
